@@ -1,0 +1,39 @@
+# --- UI ---
+streamlit
+streamlit-pdf-viewer
+
+# --- Document parsing ---
+pypdf              # thay cho PyPDF2 (đã ngừng bảo trì)
+python-docx
+
+# --- Database / vector store (PostgreSQL + pgvector) ---
+psycopg[binary]    # driver Postgres v3, cần cho langchain-postgres
+pgvector
+langchain-postgres
+
+# --- Retry/backoff ---
+tenacity
+
+# --- Embedding LOCAL ---
+langchain-huggingface
+sentence-transformers
+torch         
+
+# --- LLM (chat/agent) / Search ---
+langchain-google-genai>=2.0.0
+google-generativeai>=0.8.0
+duckduckgo-search
+cohere
+langchain-cohere>=0.3.0
+
+# --- LangChain / LangGraph core ---
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-text-splitters>=0.3.0
+langchain-community>=0.3.0
+langchain-experimental>=0.3.0
+langchain-classic>=0.1.0
+langgraph
+
+# --- Config ---
+python-dotenv
