@@ -20,19 +20,28 @@ logger = get_logger(__name__)
 
 SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".txt")
 
+def split_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> list[str]:
+    text = text.replace("\x00", "")  # Bổ sung lọc an toàn tổng quát
+    if not text.strip():
+        raise DocumentProcessingError(
+            "Tài liệu rỗng hoặc không trích xuất được nội dung nào..."
+        )
 
 def _read_pdf(file) -> str:
     reader = PdfReader(file)
-    return "".join(page.extract_text() or "" for page in reader.pages)
+    text = "".join(page.extract_text() or "" for page in reader.pages)
+    return text.replace("\x00", "")
 
 
 def _read_docx(file) -> str:
     document = docx.Document(file)
-    return "\n".join(p.text for p in document.paragraphs)
+    text = "\n".join(p.text for p in document.paragraphs)
+    return text.replace("\x00", "")
 
 
 def _read_txt(file) -> str:
-    return file.getvalue().decode("utf-8", errors="replace")
+    text = file.getvalue().decode("utf-8", errors="replace")
+    return text.replace("\x00", "")
 
 
 def extract_text(file) -> str:
