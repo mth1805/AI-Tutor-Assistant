@@ -17,7 +17,8 @@ tenacity
 # --- Embedding LOCAL ---
 langchain-huggingface
 sentence-transformers
-torch         
+torch
+torchvision
 
 # --- LLM (chat/agent) / Search ---
 langchain-google-genai>=2.0.0
