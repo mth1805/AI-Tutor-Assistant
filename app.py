@@ -71,7 +71,7 @@ def _get_or_build_agent(session_id: str):
 
     agent = build_agent(
         collection_name=session_id,
-        metadata_filter={"session_id": session_id},
+        metadata_filter=None,
     )
     st.session_state["agent"] = agent
     st.session_state["agent_session_id"] = session_id
