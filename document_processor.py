@@ -21,11 +21,16 @@ logger = get_logger(__name__)
 SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".txt")
 
 def split_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> list[str]:
-    text = text.replace("\x00", "")  # Bổ sung lọc an toàn tổng quát
+    text = text.replace("\x00", "")  # Lọc an toàn ký tự NUL
     if not text.strip():
         raise DocumentProcessingError(
-            "Tài liệu rỗng hoặc không trích xuất được nội dung nào..."
+            "Tài liệu rỗng hoặc không trích xuất được nội dung nào "
         )
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+    return splitter.split_text(text)
 
 def _read_pdf(file) -> str:
     reader = PdfReader(file)
