@@ -74,6 +74,10 @@ def make_document_reader_tool(
     def document_reader_tool(query: str) -> str:
         """LUÔN ƯU TIÊN sử dụng công cụ này đầu tiên để tìm kiếm câu trả lời từ
         tài liệu đã tải lên."""
+        logger.info(
+            "document_reader_tool GỌI: query=%r collection=%s filter=%s",
+            query, collection_name, metadata_filter,
+        )
         try:
             base_retriever = get_retriever(
                 collection_name=collection_name, k=10, filter=metadata_filter
@@ -87,14 +91,17 @@ def make_document_reader_tool(
                 base_compressor=compressor, base_retriever=base_retriever
             )
             docs = compression_retriever.invoke(query)
+            logger.info(
+                "document_reader_tool KẾT QUẢ: %d đoạn liên quan sau rerank", len(docs)
+            )
             if not docs:
                 return "Không tìm thấy nội dung liên quan trong tài liệu đã tải lên."
             return "\n\n".join(d.page_content for d in docs)
         except DatabaseConnectionError as e:
-            logger.error("Lỗi DB khi truy vấn tài liệu: %s", e)
+            logger.error("document_reader_tool LỖI DB: %s", e)
             return f"Không thể truy vấn kho tài liệu lúc này: {e}"
         except Exception as e:  # noqa: BLE001
-            logger.exception("Lỗi không xác định trong document_reader_tool")
+            logger.exception("document_reader_tool LỖI KHÔNG XÁC ĐỊNH")
             return f"Lỗi khi đọc tài liệu: {e}"
 
     return document_reader_tool
