@@ -45,3 +45,6 @@ langgraph
 
 # --- Config ---
 python-dotenv
+
+# -- S3/AWS ---
+boto3
