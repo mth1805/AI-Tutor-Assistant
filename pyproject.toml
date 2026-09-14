@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+# E/F/W: lỗi cú pháp & style cơ bản. I: sắp xếp import. UP: cú pháp hiện đại
+# (vd `X | None` thay vì `Optional[X]`). Không bật các rule "phong cách" quá
+# nghiêm ngặt (vd docstring bắt buộc) để không cản trở tốc độ phát triển.
+select = ["E", "F", "W", "I", "UP"]
+ignore = [
+    "E501",  # line-too-long: đã set line-length ở trên, một số docstring
+             # tiếng Việt dài hơn 1 chút vẫn chấp nhận được.
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

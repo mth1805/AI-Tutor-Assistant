@@ -1,9 +1,10 @@
-"""ui/chat.py - Giao diện chat với Agent."""
+"""ui/chat.py - Giao diện chat với Agent: streaming + lưu lịch sử vào Postgres."""
 from __future__ import annotations
 
 import streamlit as st
 
-from agent import ask_agent
+from agent import stream_agent
+from database import save_chat_message
 
 
 def _render_message(role: str, content: str) -> None:
@@ -12,7 +13,7 @@ def _render_message(role: str, content: str) -> None:
         st.markdown(f"<span class='{tag_class}'></span> {content}", unsafe_allow_html=True)
 
 
-def render_chat(agent, *, is_indexed: bool) -> None:
+def render_chat(agent, *, workspace_id: str, is_indexed: bool) -> None:
     st.subheader("💬 Chat với Gia sư")
     chat_container = st.container(height=600, border=True)
 
@@ -34,11 +35,18 @@ def render_chat(agent, *, is_indexed: bool) -> None:
         return
 
     st.session_state.messages.append({"role": "user", "content": prompt})
+    save_chat_message(workspace_id, "user", prompt)
+
     with chat_container:
         _render_message("user", prompt)
         with st.chat_message("assistant"):
-            with st.spinner("Gia sư đang suy nghĩ..."):
-                response = ask_agent(agent, prompt)
-            st.markdown(f"<span class='ai-tag'></span> {response}", unsafe_allow_html=True)
+            # st.write_stream render dần từng đoạn text sinh ra từ generator,
+            # và trả về toàn bộ nội dung đã ghép sau khi stream xong.
+            # Lưu ý: khi đang stream, nội dung hiển thị bằng markdown mặc định
+            # của Streamlit (không có class 'ai-tag' tùy chỉnh); sau khi lưu
+            # vào lịch sử và render lại ở lần load sau, tin nhắn sẽ dùng đúng
+            # style bong bóng chat như bình thường.
+            response = st.write_stream(stream_agent(agent, prompt))
 
     st.session_state.messages.append({"role": "assistant", "content": response})
+    save_chat_message(workspace_id, "assistant", response)

@@ -1,17 +1,19 @@
 """
 agent.py
 --------
-Khởi tạo LLM (Gemini) và Agent (LangGraph create_react_agent), và cung cấp
-hàm ask_agent() để gửi câu hỏi và luôn trả về string an toàn cho UI.
+Khởi tạo LLM (Gemini) và Agent (LangGraph create_react_agent), cung cấp:
+  - ask_agent(): gửi câu hỏi, trả về string đầy đủ (không streaming).
+  - stream_agent(): generator sinh dần từng đoạn text — dùng cho streaming
+    trong UI (st.write_stream), cải thiện cảm giác chờ khi câu trả lời dài.
 """
 from __future__ import annotations
 
-from typing import Optional
+import time
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
-from config import app_config, get_logger
+from config import app_config, get_logger, log_duration
 from exceptions import AgentError
 from tools import make_document_reader_tool, python_math_tool, web_search_tool
 
@@ -28,8 +30,11 @@ SYSTEM_PROMPT = (
     "2. Nếu document_reader_tool trả về 'Không tìm thấy nội dung liên quan', hãy nói rõ "
     "điều đó với người dùng và hỏi họ có muốn thử tìm kiếm trên web (web_search_tool) không, "
     "thay vì suy đoán rằng chưa có tài liệu nào được tải lên.\n"
-    "3. Khi tính toán, BẮT BUỘC dùng python_math_tool.\n"
-    "4. Chỉ dùng web_search_tool khi tài liệu không có thông tin liên quan."
+    "3. Kết quả từ document_reader_tool có kèm nhãn '[Nguồn: tên_file]' trước mỗi đoạn — "
+    "khi trả lời, LUÔN trích dẫn nguồn tương ứng (vd: 'Theo tài liệu abc.pdf, ...') để "
+    "người dùng biết thông tin lấy từ đâu.\n"
+    "4. Khi tính toán, BẮT BUỘC dùng python_math_tool.\n"
+    "5. Chỉ dùng web_search_tool khi tài liệu không có thông tin liên quan."
 )
 
 
@@ -40,18 +45,18 @@ def get_llm() -> ChatGoogleGenerativeAI:
             temperature=app_config.llm_temperature,
             google_api_key=app_config.google_api_key,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.exception("Không thể khởi tạo Gemini LLM")
         raise AgentError(f"Không thể khởi tạo mô hình ngôn ngữ: {e}") from e
 
 
 def build_agent(
     *,
-    collection_name: Optional[str] = None,
-    metadata_filter: Optional[dict] = None,
+    collection_name: str | None = None,
+    metadata_filter: dict | None = None,
 ):
-    """Tạo agent executor. collection_name/metadata_filter cho phép mỗi phiên
-    (mỗi user/lớp học) có phạm vi tài liệu riêng — xem tools.make_document_reader_tool.
+    """Tạo agent executor. collection_name/metadata_filter cho phép mỗi
+    workspace có phạm vi tài liệu riêng — xem tools.make_document_reader_tool.
     """
     try:
         llm = get_llm()
@@ -65,46 +70,79 @@ def build_agent(
         return create_react_agent(llm, tool_list, prompt=SYSTEM_PROMPT)
     except AgentError:
         raise
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         logger.exception("Không thể khởi tạo Agent")
         raise AgentError(f"Không thể khởi tạo agent: {e}") from e
 
 
+def _log_agent_steps(messages) -> None:
+    """Log lại từng bước agent đã thực hiện — hữu ích để debug: agent có thực
+    sự gọi tool nào không, tool trả về gì trước khi LLM tổng hợp câu trả lời."""
+    for m in messages:
+        tool_calls = getattr(m, "tool_calls", None)
+        if tool_calls:
+            logger.info("AGENT gọi tool: %s", [tc.get("name") for tc in tool_calls])
+        if getattr(m, "type", None) == "tool":
+            logger.info(
+                "AGENT nhận kết quả từ tool '%s': %s",
+                getattr(m, "name", "?"),
+                str(m.content)[:300],
+            )
+
+
+def _extract_text(content) -> str:
+    if isinstance(content, list):
+        return "".join(item.get("text", "") for item in content if isinstance(item, dict))
+    return content or ""
+
+
+@log_duration("ask_agent")
 def ask_agent(agent, question: str) -> str:
-    """Gửi câu hỏi tới agent, chuẩn hóa các định dạng response khác nhau
-    (string hoặc list[dict] content block) và bắt lỗi để UI luôn nhận được
-    1 chuỗi string thân thiện, không bao giờ crash giữa phiên chat."""
+    """Gửi câu hỏi tới agent (không streaming), luôn trả về string an toàn
+    cho UI, không bao giờ ném exception ra ngoài."""
     try:
         response = agent.invoke({"messages": [("user", question)]})
         messages = response["messages"]
-
-        # Log lại từng bước agent đã thực hiện (rất hữu ích để debug: agent có
-        # thực sự gọi tool nào không, tool trả về gì trước khi LLM tổng hợp
-        # câu trả lời cuối cùng).
-        for m in messages:
-            tool_calls = getattr(m, "tool_calls", None)
-            if tool_calls:
-                logger.info(
-                    "AGENT gọi tool: %s",
-                    [tc.get("name") for tc in tool_calls],
-                )
-            if getattr(m, "type", None) == "tool":
-                logger.info(
-                    "AGENT nhận kết quả từ tool '%s': %s",
-                    getattr(m, "name", "?"),
-                    str(m.content)[:300],
-                )
-
-        last_message = messages[-1]
-        content = last_message.content
-        if isinstance(content, list):
-            return "".join(
-                item.get("text", "") for item in content if isinstance(item, dict)
-            )
-        return content
-    except Exception as e:  # noqa: BLE001
+        _log_agent_steps(messages)
+        return _extract_text(messages[-1].content)
+    except Exception as e:
         logger.exception("Lỗi khi agent xử lý câu hỏi: %s", question)
         return (
             "⚠️ Xin lỗi, đã có lỗi xảy ra khi xử lý câu hỏi của bạn. "
             f"Chi tiết: {e}"
         )
+
+
+def stream_agent(agent, question: str):
+    """Generator sinh dần từng đoạn text câu trả lời cuối cùng của agent
+    (token streaming), dùng cho st.write_stream ở UI.
+
+    Chỉ yield phần content sinh ra ở bước LLM cuối (node 'agent' trong graph
+    của create_react_agent), bỏ qua các bước tool-calling trung gian để người
+    dùng không thấy dữ liệu tool lộn xộn giữa chừng.
+
+    Nếu streaming lỗi hoặc không được hỗ trợ (phụ thuộc phiên bản langgraph),
+    tự động fallback về ask_agent() không streaming.
+    """
+    start = time.perf_counter()
+    try:
+        streamed_any = False
+        for chunk, metadata in agent.stream(
+            {"messages": [("user", question)]},
+            stream_mode="messages",
+        ):
+            if metadata.get("langgraph_node") != "agent":
+                continue
+            text = _extract_text(getattr(chunk, "content", None))
+            if text:
+                streamed_any = True
+                yield text
+        if not streamed_any:
+            # Không có token nào được stream (vd toàn bộ là tool-call) ->
+            # fallback để vẫn có câu trả lời thay vì im lặng.
+            yield ask_agent(agent, question)
+    except Exception:
+        logger.exception("Lỗi khi streaming câu trả lời, fallback về ask_agent không streaming.")
+        yield ask_agent(agent, question)
+    finally:
+        logger.info("⏱ stream_agent hoàn thành sau %.2fs", time.perf_counter() - start)

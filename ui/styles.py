@@ -25,6 +25,7 @@ CUSTOM_CSS = """
         color: black !important;
         border-radius: 15px !important;
         padding: 10px 15px !important;
+        font-size: 12px !important;
     }
 
     div[data-testid="stChatMessage"]:has(.ai-tag) div[data-testid="stChatMessageContent"] {
@@ -32,6 +33,7 @@ CUSTOM_CSS = """
         color: black !important;
         border-radius: 15px !important;
         padding: 10px 15px !important;
+        font-size: 12px !important;
     }
 </style>
 """

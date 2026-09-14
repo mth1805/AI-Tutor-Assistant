@@ -1,0 +1,40 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-ai_tutor}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      args:
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Trong compose, DB chạy ở service riêng tên "db", không phải localhost.
+      # Biến này override giá trị PG_HOST trong .env.
+      PG_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    volumes:
+      # Giữ cache HuggingFace qua các lần container restart (tránh tải lại
+      # model nếu image chưa bake sẵn, hoặc khi đổi model khác lúc chạy).
+      - hf_cache:/root/.cache/huggingface
+
+volumes:
+  pgdata:
+  hf_cache:

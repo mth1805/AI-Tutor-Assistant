@@ -11,21 +11,23 @@ Việc tập trung cấu hình giúp:
 """
 from __future__ import annotations
 
+import contextvars
+import functools
 import logging
 import os
 import sys
+import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-def _get_env(name: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
+def _get_env(name: str, default: str | None = None, required: bool = False) -> str | None:
     value = os.getenv(name, default)
     if required and not value:
-        raise EnvironmentError(
+        raise OSError(
             f"Thiếu biến môi trường bắt buộc: '{name}'. "
             f"Vui lòng khai báo trong file .env hoặc biến môi trường hệ thống "
             f"(xem .env.example)."
@@ -62,22 +64,10 @@ class AppConfig:
     google_api_key: str = field(default_factory=lambda: _get_env("GOOGLE_API_KEY", required=True))
     cohere_api_key: str = field(default_factory=lambda: _get_env("COHERE_API_KEY", required=True))
 
-    # --- Embedding: chạy LOCAL bằng sentence-transformers, KHÔNG gọi API Gemini ---
-    # Lý do: bước index tài liệu (embedding hàng trăm/nghìn đoạn văn bản) là nơi
-    # tốn quota free-tier nhanh nhất. Chuyển sang model chạy local giúp bước này
-    # không còn phụ thuộc rate-limit/quota của Google nữa.
-    # BAAI/bge-m3 là model đa ngôn ngữ, hỗ trợ tiếng Việt tốt, phù hợp cho RAG.
-    # Nếu đổi embedding_model, PHẢI đổi luôn PG_COLLECTION (số chiều vector khác
-    # nhau giữa các model -> không thể dùng chung 1 collection cũ) và index lại
-    # toàn bộ tài liệu từ đầu.
+    # --- Embedding: chạy LOCAL bằng sentence-transformers ---
     embedding_model: str = field(default_factory=lambda: _get_env("EMBEDDING_MODEL", "BAAI/bge-m3"))
     embedding_device: str = field(default_factory=lambda: _get_env("EMBEDDING_DEVICE", "cpu"))
 
-    # NOTE: Tên model Gemini cho phần LLM (chat/agent) thay đổi theo thời gian.
-    # Luôn kiểm tra danh sách model hiện hành tại Google AI Studio / Vertex AI
-    # trước khi deploy, và ưu tiên cấu hình qua biến môi trường thay vì hard-code.
-    # gemini-2.0-flash đã bị Google khai tử (03/2026) — dùng model Flash/Flash-Lite
-    # còn được hỗ trợ trong free tier tại thời điểm deploy.
     llm_model: str = field(default_factory=lambda: _get_env("LLM_MODEL", "gemini-3.1-flash-lite"))
     llm_temperature: float = field(
         default_factory=lambda: float(_get_env("LLM_TEMPERATURE", "0.3"))
@@ -90,21 +80,89 @@ class AppConfig:
     )
     log_level: str = field(default_factory=lambda: _get_env("LOG_LEVEL", "INFO"))
 
+    # --- Chunking ---
+    # "fixed": chia theo độ dài cố định (nhanh, ổn định).
+    # "semantic": chia theo điểm ngắt ngữ nghĩa (langchain_experimental.SemanticChunker),
+    # thường cho kết quả retrieval tốt hơn với tài liệu học thuật, nhưng chậm
+    # hơn vì phải encode văn bản để tìm điểm ngắt.
+    chunking_strategy: str = field(default_factory=lambda: _get_env("CHUNKING_STRATEGY", "fixed"))
+
+    # --- OCR cho PDF dạng ảnh scan ---
+    # Yêu cầu thư viện pytesseract/pdf2image + gói hệ thống poppler/tesseract
+    # (xem packages.txt). Nếu thiếu, tự động bỏ qua OCR thay vì lỗi.
+    enable_ocr: bool = field(
+        default_factory=lambda: _get_env("ENABLE_OCR", "true").strip().lower() == "true"
+    )
+    # --- Cloud Object Storage (S3 / R2) ---
+    s3_endpoint_url: str = field(default_factory=lambda: _get_env("S3_ENDPOINT_URL", required=True))
+    s3_bucket_name: str = field(default_factory=lambda: _get_env("S3_BUCKET_NAME", "ai-tutor-files"))
+    s3_access_key: str = field(default_factory=lambda: _get_env("S3_ACCESS_KEY", required=True))
+    s3_secret_key: str = field(default_factory=lambda: _get_env("S3_SECRET_KEY", required=True))
+
 
 def get_logger(name: str) -> logging.Logger:
     """Trả về logger đã cấu hình sẵn, tránh add handler trùng lặp khi Streamlit rerun
-    (Streamlit chạy lại toàn bộ script mỗi lần tương tác)."""
+    (Streamlit chạy lại toàn bộ script mỗi lần tương tác).
+
+    Mỗi dòng log tự động kèm workspace_id hiện tại (xem set_log_context) — giúp
+    lọc log theo đúng phiên làm việc/người dùng khi nhiều người dùng chung app,
+    thay vì phải tự tay truyền workspace_id vào từng lời gọi logger.
+    """
     logger = logging.getLogger(name)
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter(
-            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+            "%(asctime)s | %(levelname)-8s | %(name)s | ws=%(workspace_id)s | %(message)s"
         )
         handler.setFormatter(formatter)
+        handler.addFilter(_WorkspaceLogFilter())
         logger.addHandler(handler)
         logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
         logger.propagate = False
     return logger
+
+
+# --- Observability: gắn workspace_id vào mọi dòng log mà không cần truyền
+# thủ công qua từng hàm (dùng contextvars — an toàn theo từng luồng chạy,
+# phù hợp với cách Streamlit chạy mỗi phiên trên 1 thread riêng). ---
+_workspace_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "workspace_id", default="-"
+)
+
+
+def set_log_context(workspace_id: str) -> None:
+    """Gọi 1 lần ở đầu mỗi lượt xử lý request (xem app.main()) để mọi log sau
+    đó — kể cả từ database.py, tools.py, agent.py — tự động có workspace_id."""
+    _workspace_ctx.set(workspace_id)
+
+
+class _WorkspaceLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.workspace_id = _workspace_ctx.get()
+        return True
+
+
+def log_duration(label: str | None = None):
+    """Decorator đo thời gian thực thi 1 hàm và ghi log INFO khi hoàn thành.
+    Dùng cho các bước tốn thời gian (gọi LLM, gọi tool, truy vấn DB) để dễ
+    phát hiện bước nào đang là điểm nghẽn hiệu năng."""
+
+    def decorator(func):
+        step_name = label or func.__name__
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            logger = get_logger(func.__module__)
+            start = time.perf_counter()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                elapsed = time.perf_counter() - start
+                logger.info("⏱ %s hoàn thành sau %.2fs", step_name, elapsed)
+
+        return wrapper
+
+    return decorator
 
 
 # --- Khởi tạo cấu hình 1 lần khi import, nhưng KHÔNG raise ngay ---
@@ -112,15 +170,15 @@ def get_logger(name: str) -> logging.Logger:
 # cho người dùng cuối. Thay vào đó, app.py sẽ gọi get_config_error() và hiển thị
 # lỗi qua st.error() một cách thân thiện.
 try:
-    db_config: Optional[DatabaseConfig] = DatabaseConfig()
-    app_config: Optional[AppConfig] = AppConfig()
-    _CONFIG_ERROR: Optional[str] = None
-except EnvironmentError as e:
+    db_config: DatabaseConfig | None = DatabaseConfig()
+    app_config: AppConfig | None = AppConfig()
+    _CONFIG_ERROR: str | None = None
+except OSError as e:
     db_config = None
     app_config = None
     _CONFIG_ERROR = str(e)
 
 
-def get_config_error() -> Optional[str]:
+def get_config_error() -> str | None:
     """Trả về thông báo lỗi cấu hình (nếu có), None nếu cấu hình hợp lệ."""
     return _CONFIG_ERROR

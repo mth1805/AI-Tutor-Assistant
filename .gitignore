@@ -1,2 +1,24 @@
-.env
+# --- Python ---
 __pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# --- Secrets / môi trường ---
+.env
+.streamlit/secrets.toml
+
+# --- Dữ liệu local / cache ---
+faiss_index/           # bản cũ dùng FAISS, không còn dùng nữa nhưng phòng khi còn sót
+.cache/
+*.log
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+.idea/
+-e 
+# --- Lint cache ---
+.ruff_cache/

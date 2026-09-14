@@ -1,0 +1,5 @@
+# Cài thêm cho môi trường phát triển/CI (không cần trên production):
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest
+pytest-mock
+ruff

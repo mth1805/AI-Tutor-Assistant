@@ -1,0 +1,5 @@
+# Streamlit Community Cloud tự động đọc file này và cài qua apt-get.
+# Cần cho tính năng OCR (pdf2image + pytesseract) khi PDF là ảnh scan.
+poppler-utils
+tesseract-ocr
+tesseract-ocr-vie
