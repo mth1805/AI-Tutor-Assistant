@@ -23,8 +23,8 @@ tenacity
 # --- Embedding LOCAL (không tốn quota API) ---
 langchain-huggingface
 sentence-transformers
-torch          # bản CPU mặc định của pip đã đủ dùng cho embedding; nếu có GPU
-               # riêng, cài torch bản CUDA phù hợp theo hướng dẫn pytorch.org
+torch      
+torchvision
 
 # --- LLM (chat/agent) / Search ---
 langchain-google-genai>=2.0.0
