@@ -107,7 +107,7 @@ def make_document_reader_tool(
         if not candidates:
             return "Không tìm thấy nội dung liên quan trong tài liệu đã tải lên."
 
-        top_docs = candidates[:3]
+        top_docs = candidates[:5]
         try:
             compressor = CohereRerank(
                 model=app_config.rerank_model,
