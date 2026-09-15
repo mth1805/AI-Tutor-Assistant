@@ -112,7 +112,7 @@ def make_document_reader_tool(
             compressor = CohereRerank(
                 model=app_config.rerank_model,
                 cohere_api_key=app_config.cohere_api_key,
-                top_n=3,
+                top_n=5,
             )
             reranked = compressor.compress_documents(candidates, query)
             if reranked:
