@@ -1,6 +1,8 @@
 # 🎓 AI Tutor Assistant — Enterprise-Grade RAG & AI Learning Platform
 *A Production-Ready, Multi-User AI Learning Platform built with LangChain, LangGraph, Streamlit, PostgreSQL (pgvector), and Cloudflare R2 Object Storage.*
 
+🌐 **Live Demo:** [AI Tutor Assistant App](https://ai-tutor-assistant-mth.streamlit.app)
+
 ---
 
 ## 🏷️ Tech Stack & Badges
