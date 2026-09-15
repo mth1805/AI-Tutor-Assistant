@@ -1,6 +1,6 @@
 """ui/sidebar.py - Sidebar: quản lý workspace, đổi tên, upload & xử lý tài liệu."""
+
 from __future__ import annotations
-from storage import upload_file_to_cloud
 
 import uuid
 
@@ -19,13 +19,14 @@ from database import (
 )
 from document_processor import process_files_to_chunks
 from exceptions import AITutorError
+from storage import upload_file_to_cloud
 
 logger = get_logger(__name__)
 
 
 def render_sidebar(*, workspace_id: str, metadata_common: dict) -> list:
     """Hiển thị sidebar: quản lý workspace (selectbox, đổi tên, xóa) + upload/xử lý tài liệu."""
-    ensure_workspace_exists(workspace_id, f"Workspace {workspace_id[-8:]}")
+    # ensure_workspace_exists(workspace_id, f"Workspace {workspace_id[-8:]}") #ko tu tao ws moi moi lan load trang
 
     with st.sidebar:
         st.title("📂 Quản lý tài liệu")
@@ -36,10 +37,13 @@ def render_sidebar(*, workspace_id: str, metadata_common: dict) -> list:
             ws_titles = {w["id"]: w["title"] for w in workspaces}
 
             if workspace_id not in ws_ids:
-                ensure_workspace_exists(workspace_id, f"Workspace {workspace_id[-8:]}")
+                # ensure_workspace_exists(workspace_id, f"Workspace {workspace_id[-8:]}")
                 workspaces = get_all_workspaces()
-                ws_ids = [w["id"] for w in workspaces]
-                ws_titles = {w["id"]: w["title"] for w in workspaces}
+                # ws_ids = [w["id"] for w in workspaces]
+                # ws_titles = {w["id"]: w["title"] for w in workspaces}
+                if ws_ids:
+                    st.query_params["ws"] = ws_ids[0]
+                    workspace_id = ws_ids[0]
 
             current_index = ws_ids.index(workspace_id) if workspace_id in ws_ids else 0
 
@@ -90,8 +94,7 @@ def render_sidebar(*, workspace_id: str, metadata_common: dict) -> list:
                     st.success("Đã đổi tên thành công!")
                     st.rerun()
 
-            #st.code(workspace_id, language=None) # Hiển thị ID workspace mới nếu muốn tạo mới
-
+            # st.code(workspace_id, language=None) # Hiển thị ID workspace mới nếu muốn tạo mới
 
             # Hiển thị dsach file đã upload trước đó
             indexed_files = get_indexed_files(workspace_id)
@@ -135,11 +138,9 @@ def render_sidebar(*, workspace_id: str, metadata_common: dict) -> list:
                     upload_file_to_cloud(workspace_id, doc.name, doc.read())
                     logger.info("Đã đẩy file lên cloud: %s (workspace: %s)", doc.name, workspace_id)
                     doc.seek(0)
-                    
+
                 # -------------------------------------------------------------
-                embeddings = (
-                    get_embeddings() if app_config.chunking_strategy == "semantic" else None
-                )
+                embeddings = get_embeddings() if app_config.chunking_strategy == "semantic" else None
                 chunks = process_files_to_chunks(
                     docs,
                     strategy=app_config.chunking_strategy,

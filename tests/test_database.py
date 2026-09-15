@@ -5,6 +5,7 @@ logic nghiệp vụ (fallback, RRF, error-swallowing), không phải test tích 
 Test tích hợp thật (cần Postgres/model chạy thật) nên tách riêng, chạy có
 điều kiện trong CI (xem README, mục Testing) bằng testcontainers hoặc DB dev.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock

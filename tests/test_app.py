@@ -2,6 +2,7 @@
 fail-fast, cache agent, tải trạng thái workspace) — không test phần vẽ UI
 (layout cột, nút toggle ẩn/hiện xem trước) vì đó là phạm vi test tích hợp
 (xem README, mục Testing)."""
+
 from __future__ import annotations
 
 import streamlit as st

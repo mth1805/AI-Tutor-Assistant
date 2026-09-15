@@ -1,4 +1,5 @@
 """Test config.py: đọc biến môi trường, validate bắt buộc, giá trị mặc định."""
+
 from __future__ import annotations
 
 import pytest

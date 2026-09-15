@@ -7,6 +7,7 @@ Mỗi đoạn văn bản (TextChunk) được gắn kèm metadata {"source": <t�
 
 Module này không phụ thuộc Streamlit -> có thể unit test độc lập.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -84,6 +85,7 @@ def _read_txt(file) -> str:
     text = file.getvalue().decode("utf-8", errors="replace")
     return text.replace("\x00", "")
 
+
 def extract_text(file, *, enable_ocr: bool = True) -> str:
     """Trích xuất text từ 1 file upload (Streamlit UploadedFile hoặc file-like).
 
@@ -160,9 +162,7 @@ def split_text(
         try:
             return _split_semantic(text, embeddings)
         except Exception as e:  # noqa: BLE001
-            logger.warning(
-                "Semantic chunking lỗi (%s), fallback về fixed-size chunking.", e
-            )
+            logger.warning("Semantic chunking lỗi (%s), fallback về fixed-size chunking.", e)
             return _split_fixed(text, chunk_size, chunk_overlap)
     return _split_fixed(text, chunk_size, chunk_overlap)
 
@@ -194,9 +194,7 @@ def process_files_to_chunks(
             continue
 
         if not text.strip():
-            errors.append(
-                f"File '{f.name}' không có nội dung để index (có thể cần OCR thủ công)."
-            )
+            errors.append(f"File '{f.name}' không có nội dung để index (có thể cần OCR thủ công).")
             continue
 
         chunks = split_text(

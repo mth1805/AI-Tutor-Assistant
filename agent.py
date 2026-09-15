@@ -6,6 +6,7 @@ Khởi tạo LLM (Gemini) và Agent (LangGraph create_react_agent), cung cấp:
   - stream_agent(): generator sinh dần từng đoạn text — dùng cho streaming
     trong UI (st.write_stream), cải thiện cảm giác chờ khi câu trả lời dài.
 """
+
 from __future__ import annotations
 
 import time
@@ -61,9 +62,7 @@ def build_agent(
     try:
         llm = get_llm()
         tool_list = [
-            make_document_reader_tool(
-                collection_name=collection_name, metadata_filter=metadata_filter
-            ),
+            make_document_reader_tool(collection_name=collection_name, metadata_filter=metadata_filter),
             python_math_tool,
             web_search_tool,
         ]
@@ -107,10 +106,7 @@ def ask_agent(agent, question: str) -> str:
         return _extract_text(messages[-1].content)
     except Exception as e:
         logger.exception("Lỗi khi agent xử lý câu hỏi: %s", question)
-        return (
-            "⚠️ Xin lỗi, đã có lỗi xảy ra khi xử lý câu hỏi của bạn. "
-            f"Chi tiết: {e}"
-        )
+        return f"⚠️ Xin lỗi, đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Chi tiết: {e}"
 
 
 def stream_agent(agent, question: str):

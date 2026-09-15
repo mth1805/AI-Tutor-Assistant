@@ -11,6 +11,7 @@ document_reader_tool được tạo qua factory (make_document_reader_tool) thay
 là 1 tool tĩnh toàn cục, để mỗi phiên/agent có thể gắn với đúng collection và
 metadata filter của mình (cô lập dữ liệu giữa các workspace).
 """
+
 from __future__ import annotations
 
 import time
@@ -87,13 +88,13 @@ def make_document_reader_tool(
         tài liệu đã tải lên."""
         logger.info(
             "document_reader_tool GỌI: query=%r collection=%s filter=%s",
-            query, collection_name, metadata_filter,
+            query,
+            collection_name,
+            metadata_filter,
         )
         start = time.perf_counter()
         try:
-            candidates = hybrid_search(
-                query, collection_name=collection_name, filter=metadata_filter, k=10
-            )
+            candidates = hybrid_search(query, collection_name=collection_name, filter=metadata_filter, k=10)
         except DatabaseConnectionError as e:
             logger.error("document_reader_tool LỖI DB: %s", e)
             return f"Không thể truy vấn kho tài liệu lúc này: {e}"
@@ -120,9 +121,7 @@ def make_document_reader_tool(
             # Cohere lỗi (hết quota, sai key, downtime...) KHÔNG được làm hỏng
             # toàn bộ câu trả lời — fallback về top-k của hybrid search (chưa
             # rerank) vẫn tốt hơn nhiều so với báo lỗi hoàn toàn cho người dùng.
-            logger.warning(
-                "Cohere rerank lỗi (%s) -> dùng kết quả hybrid search không rerank.", e
-            )
+            logger.warning("Cohere rerank lỗi (%s) -> dùng kết quả hybrid search không rerank.", e)
 
         logger.info("document_reader_tool KẾT QUẢ: %d đoạn liên quan", len(top_docs))
         return _format_with_citations(top_docs)

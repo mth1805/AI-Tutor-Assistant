@@ -7,6 +7,7 @@ Entry point Streamlit. CHỈ chịu trách nhiệm điều phối UI (orchestrat
   3. Gọi các module ui/* để vẽ giao diện.
   4. Quản lý vòng đời agent trong session_state.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -17,11 +18,11 @@ from agent import build_agent
 from config import get_config_error, get_logger, set_log_context
 from database import check_database_connection, collection_has_documents, get_chat_history, get_indexed_files
 from exceptions import AITutorError
+from storage import get_cloud_files_for_preview
 from ui.chat import render_chat
 from ui.preview import render_preview
 from ui.sidebar import render_sidebar
 from ui.styles import CUSTOM_CSS
-from storage import get_cloud_files_for_preview
 
 logger = get_logger(__name__)
 
@@ -107,10 +108,10 @@ def main() -> None:
     _load_workspace_state(workspace_id)
 
     docs = render_sidebar(workspace_id=workspace_id, metadata_common=metadata_common)
-    
+
     # --- TÍCH HỢP CLOUD STORAGE: LẤY LẠI FILE TỪ CLOUD ĐỂ XEM TRƯỚC ---
     cloud_files = get_cloud_files_for_preview(workspace_id)
-    
+
     # Ưu tiên file người dùng mới upload ở phiên hiện tại, nếu không có thì lấy từ Cloud Object Storage lên
     active_docs = docs if docs else cloud_files
     indexed_file_names = get_indexed_files(workspace_id)
@@ -139,7 +140,7 @@ def main() -> None:
                 if st.button("◀", help="Thu gọn xem trước", use_container_width=True):
                     st.session_state["show_preview"] = False
                     st.rerun()
-            
+
             # TRUYỀN ACTIVE_DOCS ĐỂ HIỂN THỊ FILE TỪ CLOUD LÊN GIAO DIỆN
             render_preview(active_docs, indexed_file_names)
 

@@ -1,4 +1,5 @@
 """Test tools.py: định dạng trích dẫn nguồn, fallback khi Cohere rerank lỗi."""
+
 from __future__ import annotations
 
 from langchain_core.documents import Document

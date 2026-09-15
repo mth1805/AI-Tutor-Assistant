@@ -9,6 +9,7 @@ Việc tập trung cấu hình giúp:
   - Fail-fast có kiểm soát: lỗi cấu hình được bắt và hiển thị đẹp trên UI
     thay vì làm crash tiến trình với traceback thô.
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -44,17 +45,12 @@ class DatabaseConfig:
     database: str = field(default_factory=lambda: _get_env("PG_DATABASE", "ai_tutor"))
     user: str = field(default_factory=lambda: _get_env("PG_USER", required=True))
     password: str = field(default_factory=lambda: _get_env("PG_PASSWORD", required=True))
-    collection_name: str = field(
-        default_factory=lambda: _get_env("PG_COLLECTION", "ai_tutor_documents")
-    )
+    collection_name: str = field(default_factory=lambda: _get_env("PG_COLLECTION", "ai_tutor_documents"))
 
     @property
     def connection_string(self) -> str:
         # Dùng driver psycopg (v3) - bắt buộc cho langchain-postgres.
-        return (
-            f"postgresql+psycopg://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.database}"
-        )
+        return f"postgresql+psycopg://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
 @dataclass(frozen=True)
@@ -69,15 +65,11 @@ class AppConfig:
     embedding_device: str = field(default_factory=lambda: _get_env("EMBEDDING_DEVICE", "cpu"))
 
     llm_model: str = field(default_factory=lambda: _get_env("LLM_MODEL", "gemini-3.1-flash-lite"))
-    llm_temperature: float = field(
-        default_factory=lambda: float(_get_env("LLM_TEMPERATURE", "0.3"))
-    )
+    llm_temperature: float = field(default_factory=lambda: float(_get_env("LLM_TEMPERATURE", "0.3")))
     rerank_model: str = field(
         default_factory=lambda: _get_env("COHERE_RERANK_MODEL", "rerank-multilingual-v3.0")
     )
-    embedding_batch_size: int = field(
-        default_factory=lambda: int(_get_env("EMBEDDING_BATCH_SIZE", "50"))
-    )
+    embedding_batch_size: int = field(default_factory=lambda: int(_get_env("EMBEDDING_BATCH_SIZE", "50")))
     log_level: str = field(default_factory=lambda: _get_env("LOG_LEVEL", "INFO"))
 
     # --- Chunking ---
@@ -90,9 +82,7 @@ class AppConfig:
     # --- OCR cho PDF dạng ảnh scan ---
     # Yêu cầu thư viện pytesseract/pdf2image + gói hệ thống poppler/tesseract
     # (xem packages.txt). Nếu thiếu, tự động bỏ qua OCR thay vì lỗi.
-    enable_ocr: bool = field(
-        default_factory=lambda: _get_env("ENABLE_OCR", "true").strip().lower() == "true"
-    )
+    enable_ocr: bool = field(default_factory=lambda: _get_env("ENABLE_OCR", "true").strip().lower() == "true")
     # --- Cloud Object Storage (S3 / R2) ---
     s3_endpoint_url: str = field(default_factory=lambda: _get_env("S3_ENDPOINT_URL", required=True))
     s3_bucket_name: str = field(default_factory=lambda: _get_env("S3_BUCKET_NAME", "ai-tutor-files"))
@@ -125,9 +115,7 @@ def get_logger(name: str) -> logging.Logger:
 # --- Observability: gắn workspace_id vào mọi dòng log mà không cần truyền
 # thủ công qua từng hàm (dùng contextvars — an toàn theo từng luồng chạy,
 # phù hợp với cách Streamlit chạy mỗi phiên trên 1 thread riêng). ---
-_workspace_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "workspace_id", default="-"
-)
+_workspace_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("workspace_id", default="-")
 
 
 def set_log_context(workspace_id: str) -> None:

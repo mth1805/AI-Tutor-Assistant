@@ -5,11 +5,8 @@ Cấu hình chung cho toàn bộ test suite:
   1. Đặt sẵn các biến môi trường bắt buộc TRƯỚC khi bất kỳ module nào của app
      được import, để config.py không raise lỗi khi collect test.
   2. Stub (giả lập) module `langchain_huggingface` bằng 1 module giả.
-     Lý do: package thật kéo theo sentence-transformers + torch (~1-2GB) —
-     unit test không cần tải model thật, chỉ cần class HuggingFaceEmbeddings
-     tồn tại để `database.py` import được. Test tích hợp thật (cần model/DB
-     thật) nên đặt riêng và chạy có điều kiện (xem README, mục Testing).
 """
+
 from __future__ import annotations
 
 import os
@@ -94,11 +91,29 @@ _fake_st.StopException = _FakeStopException
 # bootstrap fail-fast, cache agent), không gọi main() hay test phần render
 # UI/toggle (thuộc phạm vi test tích hợp, xem README).
 for _name in (
-    "set_page_config", "markdown", "header", "columns", "subheader",
-    "button", "rerun", "container", "chat_message", "chat_input",
-    "write_stream", "progress", "success", "warning", "expander",
-    "divider", "text_input", "code", "caption", "text", "selectbox",
-    "file_uploader", "spinner",
+    "set_page_config",
+    "markdown",
+    "header",
+    "columns",
+    "subheader",
+    "button",
+    "rerun",
+    "container",
+    "chat_message",
+    "chat_input",
+    "write_stream",
+    "progress",
+    "success",
+    "warning",
+    "expander",
+    "divider",
+    "text_input",
+    "code",
+    "caption",
+    "text",
+    "selectbox",
+    "file_uploader",
+    "spinner",
 ):
     setattr(_fake_st, _name, lambda *a, **kw: None)
 
