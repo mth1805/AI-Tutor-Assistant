@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import docx
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
 from config import get_logger
@@ -62,7 +62,7 @@ def _ocr_pdf(file) -> str:
         file.seek(0)
         images = convert_from_bytes(file.read())
         logger.info("Bắt đầu OCR cho file '%s' (%d trang)...", getattr(file, "name", "unknown"), len(images))
-        
+
         text_parts = []
         for idx, img in enumerate(images):
             gray_img = img.convert("L")
@@ -72,7 +72,7 @@ def _ocr_pdf(file) -> str:
                 logger.info("-> OCR thành công trang %d/%d (Đã quét được %d ký tự).", idx + 1, len(images), len(txt.strip()))
             else:
                 logger.warning("-> Trang %d/%d không quét được chữ nào qua OCR.", idx + 1, len(images))
-                
+
         return "\n".join(text_parts)
     except Exception as e:  # noqa: BLE001
         logger.warning("OCR thất bại cho file '%s': %s", getattr(file, "name", "?"), e)
@@ -83,7 +83,7 @@ def _read_pdf(file) -> str:
     """Đọc PDF kết hợp text thuần và OCR toàn trang, log kết quả ra console để theo dõi."""
     text_parts = []
     file_name = getattr(file, "name", "unknown")
-    
+
     # 1. Thử trích xuất text thuần trước
     try:
         file.seek(0)
