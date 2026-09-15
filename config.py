@@ -84,10 +84,11 @@ class AppConfig:
     # (xem packages.txt). Nếu thiếu, tự động bỏ qua OCR thay vì lỗi.
     enable_ocr: bool = field(default_factory=lambda: _get_env("ENABLE_OCR", "true").strip().lower() == "true")
     # --- Cloud Object Storage (S3 / R2) ---
-    s3_endpoint_url: str = field(default_factory=lambda: _get_env("S3_ENDPOINT_URL", required=True))
+    # --- Cloud Object Storage (S3 / R2) ---
+    s3_endpoint_url: str | None = field(default_factory=lambda: _get_env("S3_ENDPOINT_URL", ""))
     s3_bucket_name: str = field(default_factory=lambda: _get_env("S3_BUCKET_NAME", "ai-tutor-files"))
-    s3_access_key: str = field(default_factory=lambda: _get_env("S3_ACCESS_KEY", required=True))
-    s3_secret_key: str = field(default_factory=lambda: _get_env("S3_SECRET_KEY", required=True))
+    s3_access_key: str | None = field(default_factory=lambda: _get_env("S3_ACCESS_KEY", ""))
+    s3_secret_key: str | None = field(default_factory=lambda: _get_env("S3_SECRET_KEY", ""))
 
 
 def get_logger(name: str) -> logging.Logger:

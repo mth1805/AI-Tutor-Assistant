@@ -104,6 +104,8 @@ def get_embeddings() -> HuggingFaceEmbeddings:
     Streamlit chạy lại toàn bộ script mỗi lần tương tác, nên nếu không cache,
     model sẽ bị nạp lại liên tục làm chậm UI.
     """
+    if app_config is None:
+        raise EmbeddingError("App config is not initialized.")
     try:
         return HuggingFaceEmbeddings(
             model_name=app_config.embedding_model,
@@ -182,6 +184,9 @@ def index_chunks(
         source = chunk.metadata.get("source", "unknown")
         chunk.metadata = {"source": source}
         chunk.metadata.update(metadata_common)
+
+    if app_config is None:
+        raise EmbeddingError("App config is not initialized.")
 
     store = get_vector_store(collection_name)
     batch_size = batch_size or app_config.embedding_batch_size
@@ -425,7 +430,9 @@ def delete_workspace(workspace_id: str) -> None:
                     (workspace_id,),
                 )
 
-                conn.commit()
+                if hasattr(conn, "commit"):
+                    conn.commit()
+
         logger.info("Đã xóa hoàn toàn workspace '%s' và dữ liệu liên quan.", workspace_id)
     except Exception as e:
         logger.exception("Lỗi khi xóa workspace '%s': %s", workspace_id, e)

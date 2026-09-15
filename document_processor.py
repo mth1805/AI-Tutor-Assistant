@@ -16,6 +16,7 @@ from typing import Literal
 
 import docx
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
 from pypdf import PdfReader
 
 from config import get_logger
@@ -50,19 +51,28 @@ class TextChunk:
 
 
 def _ocr_pdf(file) -> str:
-    """OCR toàn bộ PDF thành text — dùng khi PDF là ảnh scan (PdfReader không
-    trích xuất được text nào). Yêu cầu poppler + tesseract cài ở tầng hệ
-    thống (xem packages.txt)."""
+    """OCR toàn bộ PDF thành text có xử lý ảnh (Grayscale) để đọc biểu đồ màu."""
     if not _OCR_AVAILABLE:
         logger.warning(
             "Thiếu thư viện OCR (pytesseract/pdf2image) hoặc poppler/tesseract "
-            "chưa cài ở hệ thống -> bỏ qua OCR. Xem packages.txt."
+            "chưa cài ở hệ thống -> bỏ qua OCR."
         )
         return ""
     try:
         file.seek(0)
         images = convert_from_bytes(file.read())
-        text_parts = [pytesseract.image_to_string(img, lang="vie+eng") for img in images]
+        logger.info("Bắt đầu OCR cho file '%s' (%d trang)...", getattr(file, "name", "unknown"), len(images))
+        
+        text_parts = []
+        for idx, img in enumerate(images):
+            gray_img = img.convert("L")
+            txt = pytesseract.image_to_string(gray_img, lang="eng")
+            if txt.strip():
+                text_parts.append(txt)
+                logger.info("-> OCR thành công trang %d/%d (Đã quét được %d ký tự).", idx + 1, len(images), len(txt.strip()))
+            else:
+                logger.warning("-> Trang %d/%d không quét được chữ nào qua OCR.", idx + 1, len(images))
+                
         return "\n".join(text_parts)
     except Exception as e:  # noqa: BLE001
         logger.warning("OCR thất bại cho file '%s': %s", getattr(file, "name", "?"), e)
@@ -70,9 +80,34 @@ def _ocr_pdf(file) -> str:
 
 
 def _read_pdf(file) -> str:
-    reader = PdfReader(file)
-    text = "".join(page.extract_text() or "" for page in reader.pages)
-    return text.replace("\x00", "")
+    """Đọc PDF kết hợp text thuần và OCR toàn trang, log kết quả ra console để theo dõi."""
+    text_parts = []
+    file_name = getattr(file, "name", "unknown")
+    
+    # 1. Thử trích xuất text thuần trước
+    try:
+        file.seek(0)
+        reader = PdfReader(file)
+        raw_text = "".join(page.extract_text() or "" for page in reader.pages)
+        if raw_text.strip():
+            logger.info("Đã trích xuất %d ký tự text thuần (selectable text) từ file '%s'.", len(raw_text.strip()), file_name)
+            text_parts.append(raw_text)
+        else:
+            logger.info("File '%s' không có text thuần (hoặc hoàn toàn là file ảnh/scan).", file_name)
+    except Exception as e:
+        logger.warning("Không thể đọc text thuần từ PDF: %s", e)
+
+    # 2. Chạy OCR bổ sung
+    if _OCR_AVAILABLE:
+        logger.info("Kích hoạt tiến trình OCR hình ảnh/biểu đồ cho file '%s'...", file_name)
+        ocr_text = _ocr_pdf(file)
+        if ocr_text.strip():
+            text_parts.append(ocr_text)
+            logger.info("Đã bổ sung thêm %d ký tự từ OCR vào nội dung xử lý của file '%s'.", len(ocr_text.strip()), file_name)
+
+    combined_text = "\n".join(text_parts)
+    logger.info("Tổng số lượng ký tự thu được sau khi xử lý file '%s' là: %d", file_name, len(combined_text.strip()))
+    return combined_text.replace("\x00", "")
 
 
 def _read_docx(file) -> str:
@@ -134,7 +169,6 @@ def _split_semantic(text: str, embeddings) -> list[str]:
     """Chia đoạn theo điểm ngắt ngữ nghĩa thay vì độ dài cố định. Thường cho
     kết quả retrieval tốt hơn với tài liệu học thuật có mạch ý rõ ràng, nhưng
     chậm hơn vì phải encode văn bản để xác định điểm ngắt."""
-    from langchain_experimental.text_splitter import SemanticChunker
 
     splitter = SemanticChunker(embeddings)
     return splitter.split_text(text)
@@ -148,7 +182,7 @@ def split_text(
     chunk_overlap: int = 200,
     embeddings=None,
 ) -> list[str]:
-    text = text.replace("\x00", "")  # Lọc an toàn ký tự NUL (Postgres không chấp nhận trong text)
+    text = text.replace("\x00", "")  # Lọc ký tự NUL (Postgres không chấp nhận trong text)
     if not text.strip():
         raise DocumentProcessingError(
             "Tài liệu rỗng hoặc không trích xuất được nội dung nào "

@@ -1,20 +1,61 @@
-# AI Tutor — Refactored (LangChain + LangGraph + Streamlit + PostgreSQL/pgvector)
+# 🎓 AI Tutor Assistant — Enterprise-Grade RAG & AI Learning Platform
+*A Production-Ready, Multi-User AI Learning Platform built with LangChain, LangGraph, Streamlit, PostgreSQL (pgvector), and Cloudflare R2 Object Storage.*
 
-## 1. Vì sao refactor
+---
 
-File `app.py` gốc gộp chung: đọc file, chunk, embedding, DB (FAISS local),
-khởi tạo agent, định nghĩa tool, và toàn bộ UI Streamlit trong **một file**.
-Vấn đề với cách này ở quy mô production:
+## 🏷️ Tech Stack & Badges
+<p align="left">
+  <img src="https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" />
+  <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white" />
+  <img src="https://img.shields.io/badge/LangGraph-1C3C3C?style=for-the-badge&logo=graph&logoColor=white" />
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
+  <img src="https://img.shields.io/badge/pgvector-336791?style=for-the-badge&logo=postgresql&logoColor=white" />
+  <img src="https://img.shields.io/badge/Cloudflare_R2-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" />
+  <img src="https://img.shields.io/badge/HuggingFace-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" />
+  <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" />
+  <img src="https://img.shields.io/badge/Pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white" />
+  <img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" />
+</p>
 
-| Vấn đề trong bản gốc | Hệ quả |
+---
+
+## 📊 Kiến trúc tổng quan & Luồng hoạt động (Architecture & Flow)
+
+<p align="center">
+  <img src="assets/flow.jpg" alt="AI Tutor Assistant Project Flow" width="100%" />
+</p>
+
+---
+
+## 🚀 1. Tổng quan dự án & Vấn đề giải quyết
+**AI Tutor** là ứng dụng trợ lý học tập thông minh cho phép người dùng upload tài liệu (PDF, DOCX, TXT), lưu trữ vĩnh viễn trên Cloud Object Storage, quản lý không gian làm việc (workspace) thông minh qua URL và Database, thực hiện tìm kiếm kết hợp (Hybrid Search) và tương tác với AI Agent hỗ trợ gọi công cụ (Web Search, Python REPL, Document Reader).
+
+Dự án được thiết kế theo kiến trúc phân tầng (layered architecture) chuẩn **Production-Ready**, giải quyết các bài toán mà project ban đầu, AI Tutor RAG (có thể xem trong repo của tác giả) gặp phải :
+
+| Vấn đề ở bản gốc / Mô hình đơn giản | Giải pháp kiến trúc tại dự án này |
 |---|---|
-| FAISS lưu file local (`faiss_index/`) | Không scale nhiều instance, mất dữ liệu khi container restart, không phân quyền theo user |
-| `time.sleep(8)` cứng giữa các batch embedding | Chậm không cần thiết khi API ổn định, vẫn có thể fail khi bị rate-limit thật |
-| Không có `try/except` quanh kết nối DB / gọi Gemini | Lỗi mạng/API sẽ crash toàn bộ Streamlit script, người dùng thấy traceback thô |
-| Toàn bộ logic + UI trong 1 file 250+ dòng | Khó test, khó review, khó thêm tính năng mà không đụng chỗ khác |
-| Không có khái niệm user/collection | Tất cả người dùng chia sẻ chung 1 kho tài liệu — không thể phân quyền |
+| Lưu file tạm trên đĩa local (mất khi container restart) | Tích hợp **Cloudflare R2 / AWS S3 (via `boto3`)** lưu trữ vĩnh viễn file gốc |
+| Sinh "workspace rác" liên tục khi người dùng chỉ load trang | Áp dụng cơ chế **Lazy Creation** (chỉ ghi nhận vào DB khi có tương tác thật) |thực tế
+| FAISS local, không scale được đa người dùng | Sử dụng **PostgreSQL + pgvector** (chuẩn hóa multi-instance, query vector tối ưu) |
+| Quota embedding API Gemini nhanh cạn kiệt | Chuyển đổi embedding sang local với **`BAAI/bge-m3`** đa ngôn ngữ |
+| Code dồn cục trong 1 file, không test được | Tách tầng rõ ràng, viết unit test toàn diện với `pytest` và CI tự động |
 
-## 2. Cấu trúc thư mục sau refactor
+---
+
+## 🛠️ 2. Tech Stack & Architecture
+* **Frontend / UI**: Streamlit (Responsive Layout, Dynamic Sidebar, Toggleable Preview Panel, Custom CSS Chat Bubbles).
+* **AI & Agentic Framework**: LangChain, LangGraph (Stateful Agent, Streaming response, Tool calling).
+* **LLM & Embeddings**: Google Gemini API (LLM) + HuggingFace Embeddings (`BAAI/bge-m3` chạy local tối ưu chi phí).
+* **Database & Vector Search**: PostgreSQL với extension **pgvector**, hỗ trợ Hybrid Search (Vector + Full-Text Search qua Reciprocal Rank Fusion).
+* **Cloud Storage**: Cloudflare R2 (Tương thích chuẩn S3 API) lưu trữ tài liệu gốc, đảm bảo tính năng xem trước hoạt động ổn định trên Cloud.
+* **Observability & CI/CD**: Context-based Logging (`workspace_id`), Duration Performance Decorators, Pytest, GitHub Actions CI.
+
+---
+
+## 📂 3. Cấu trúc thư mục (Clean Architecture)
+
 
 ```
 ai_tutor/
@@ -23,6 +64,7 @@ ai_tutor/
 ├── exceptions.py             # Hệ thống exception riêng (AITutorError và các lớp con)
 ├── database.py               # PostgreSQL + pgvector, hybrid search, lịch sử chat
 ├── document_processor.py     # Đọc PDF/DOCX/TXT, OCR, chunking (fixed/semantic)
+├── storage.py              # Quản lý Cloud Object Storage (S3/R2) cho file xem trước
 ├── tools.py                   # web_search_tool, python_math_tool, document_reader_tool
 ├── agent.py                  # LLM Gemini + LangGraph agent, ask/stream
 ├── ui/
@@ -51,123 +93,26 @@ ai_tutor/
 └── README.md
 ```
 
-**Nguyên tắc phân lớp:** `app.py` và `ui/*` chỉ được gọi hàm từ
-`database.py` / `document_processor.py` / `agent.py` / `tools.py` — không
-bao giờ tự mở kết nối DB hay gọi API trực tiếp. Điều này cho phép:
-- Viết unit test cho `document_processor.py`, `database.py` mà không cần
-  Streamlit chạy.
-- Viết một script CLI/cron riêng để batch-index tài liệu, tái sử dụng
-  `document_processor` + `database` mà không đụng vào UI.
+## 4. Các điểm nổi bật về Kỹ thuật & Nghiệp vụ
 
-## 3. Embedding chạy LOCAL thay vì gọi API Gemini
+### 🌟 4.1. Giải quyết lưu trữ trên Cloud & Tối ưu Workspace (Lazy Creation)
+* **Cloud-Native Persistence**: Tài liệu upload được đẩy trực tiếp lên Cloudflare R2 qua `boto3` theo cấu trúc `workspaces/{workspace_id}/{file_name}`, giúp tính năng **Xem trước tài liệu** hoạt động mượt mà ngay cả khi F5 hoặc deploy trên Streamlit Community Cloud (vốn dùng ephemeral file system).
+* **Lazy Workspace Creation**: Khắc phục triệt để tình trạng sinh workspace rác khi người dùng chỉ truy cập web rồi tắt đi. Workspace chỉ được chính thức ghi nhận vào PostgreSQL khi người dùng thực hiện **gửi tin nhắn đầu tiên** hoặc **bấm xử lý tài liệu**.
 
-Bản này dùng `HuggingFaceEmbeddings` (`BAAI/bge-m3`, chạy CPU bằng
-`sentence-transformers`) thay vì `GoogleGenerativeAIEmbeddings`. Lý do:
-free-tier Gemini rất dễ hết quota, và bước **index tài liệu** (embed hàng
-trăm/nghìn đoạn văn bản) là nơi tốn quota nhanh nhất trong app — nhiều hơn
-hẳn so với các lệnh gọi LLM khi chat. Chuyển bước này sang chạy local giúp:
+### 🔍 4.2. RAG Nâng cao (Advanced RAG Pipeline)
+* **Embedding Local (`BAAI/bge-m3`)**: Tránh hoàn toàn lỗi giới hạn quota (Rate-limit) khi index tài liệu dung lượng lớn.
+* **Hybrid Search**: Kết hợp vector search với full-text search của PostgreSQL thông qua thuật toán **Reciprocal Rank Fusion (RRF)**, giúp truy xuất chính xác các số liệu, từ khóa kỹ thuật.
+* **OCR Tự động**: Nhận diện PDF dạng scan ảnh và tự động kích hoạt OCR (`pytesseract` + `pdf2image`) mượt mà.
 
-- Không còn phụ thuộc rate-limit/quota của Google cho việc index.
-- `bge-m3` là model đa ngôn ngữ, hỗ trợ tiếng Việt tốt, phù hợp cho RAG.
-- Gemini chỉ còn được dùng cho phần LLM/agent trả lời câu hỏi — vốn có số
-  lượng lệnh gọi ít hơn nhiều so với embedding.
+### 🌐 4.3. Quản lý trạng thái qua URL & Database
+* **Stateful qua URL (`?ws=...`)**: Trạng thái phiên làm việc gắn liền với URL, cho phép chia sẻ link workspace chứa sẵn bộ tài liệu cho người khác.
+* **Database Management**: Lưu trữ lịch sử chat và dữ liệu workspace đồng bộ. Hỗ trợ đầy đủ thao tác Tạo mới, Đổi tên, và Xóa sạch dữ liệu (dọn dẹp cả vector embedding lẫn file trên Cloud Storage).
 
-**Lưu ý khi migrate:**
-- `get_embeddings()` được cache bằng `@lru_cache` vì nạp model từ đĩa mất vài
-  giây — tránh nạp lại mỗi lần Streamlit rerun script.
-- Lần chạy đầu tiên trên máy mới sẽ tự động tải model (~1-2GB) từ
-  HuggingFace Hub về `~/.cache/huggingface` — cần mạng ổn định lần đầu, các
-  lần sau chạy hoàn toàn offline.
-- **Số chiều vector khác nhau** giữa Gemini embedding và `bge-m3` (1024 chiều).
-  Nếu trước đó đã index dữ liệu bằng Gemini, **phải đổi `PG_COLLECTION` sang
-  tên mới** và index lại toàn bộ tài liệu — không thể trộn 2 loại vector
-  trong cùng 1 collection.
-- Muốn đổi sang model embedding local khác (ví dụ
-  `intfloat/multilingual-e5-large` nếu cần độ chính xác cao hơn, đổi lại nặng
-  hơn), chỉ cần sửa `EMBEDDING_MODEL` trong `.env`, không cần sửa code.
-- Nếu deploy trên máy có GPU, đổi `EMBEDDING_DEVICE=cuda` trong `.env` và cài
-  `torch` bản CUDA phù hợp để encode nhanh hơn đáng kể.
+---
 
-## 3.1. Nâng cao chất lượng RAG
-
-**Trích dẫn nguồn**: mỗi đoạn văn bản khi index được gắn `metadata.source =
-tên_file`. `document_reader_tool` trả kết quả kèm nhãn `[Nguồn: tên_file]`,
-và system prompt của agent (`agent.SYSTEM_PROMPT`) yêu cầu LLM trích dẫn
-nguồn tương ứng trong câu trả lời — người dùng biết thông tin lấy từ file nào.
-*(Tài liệu đã index trước khi có tính năng này sẽ không có `source` — cần
-index lại để có trích dẫn.)*
-
-**Chunking theo ngữ nghĩa**: đặt `CHUNKING_STRATEGY=semantic` trong `.env` để
-dùng `SemanticChunker` (chia đoạn theo điểm ngắt ngữ nghĩa) thay vì chia theo
-độ dài cố định. Cho kết quả retrieval tốt hơn với tài liệu học thuật có mạch
-ý rõ ràng, nhưng chậm hơn khi index vì phải encode để tìm điểm ngắt. Mặc định
-vẫn là `fixed` (nhanh, ổn định).
-
-**OCR cho PDF scan ảnh**: nếu `PdfReader` không trích xuất được text (PDF là
-ảnh scan), hệ thống tự động thử OCR bằng `pytesseract` + `pdf2image` (yêu cầu
-gói hệ thống `poppler-utils`, `tesseract-ocr`, `tesseract-ocr-vie` — đã khai
-báo sẵn trong `packages.txt`, Streamlit Community Cloud tự đọc file này). Nếu
-thiếu thư viện/gói hệ thống, tự động bỏ qua OCR (không crash), chỉ log
-warning. Tắt tính năng này bằng `ENABLE_OCR=false` nếu không cần.
-
-**Hybrid search**: `document_reader_tool` không chỉ dùng vector search mà còn
-kết hợp full-text search của Postgres (`to_tsvector`/`plainto_tsquery`) qua
-Reciprocal Rank Fusion (`database.hybrid_search`). Giúp bắt tốt hơn các câu
-hỏi chứa từ khóa/số liệu chính xác (công thức, tên riêng, số liệu) mà vector
-thuần đôi khi bỏ sót. Nếu full-text search lỗi (khác schema bảng do phiên bản
-`langchain-postgres` khác nhau), tự động fallback về vector-only, không làm
-gián đoạn trải nghiệm.
-
-**Rerank có fallback**: nếu Cohere rerank lỗi (hết quota, sai key, downtime),
-`document_reader_tool` tự động dùng top-k của hybrid search (chưa rerank)
-thay vì báo lỗi hoàn toàn cho người dùng.
-
-## 3.2. Trải nghiệm người dùng (UX)
-
-**Streaming câu trả lời**: `agent.stream_agent()` sinh dần từng đoạn text từ
-LLM (qua `agent.stream(..., stream_mode="messages")`), UI dùng
-`st.write_stream()` để hiển thị ngay khi có token thay vì đợi toàn bộ câu trả
-lời. Nếu streaming lỗi hoặc không được hỗ trợ (phụ thuộc phiên bản
-`langgraph`), tự động fallback về `ask_agent()` không streaming.
-
-**Không gian làm việc qua URL (workspace)**: thay vì `session_id` ngẫu nhiên
-mỗi tab (mất khi refresh trang), workspace ID được lưu trong URL
-(`?ws=ws_xxxxx`). Refresh trang, đóng mở lại tab, hay chia sẻ link cho người
-khác đều giữ nguyên đúng bộ tài liệu + lịch sử chat. Nút "Tạo không gian làm
-việc mới" trong sidebar sinh 1 workspace trống để bắt đầu bộ tài liệu khác
-(vd môn học khác).
-
-**Lịch sử chat lưu vào Postgres**: mỗi tin nhắn (user & assistant) được lưu
-vào bảng `ai_tutor_chat_messages` theo `workspace_id` (`database.save_chat_message`
-/ `get_chat_history`). Khi quay lại workspace (kể cả sau khi app bị khởi động
-lại — Streamlit Cloud có thể restart process bất cứ lúc nào), lịch sử được
-tải lại đầy đủ thay vì mất trắng như bản dùng `st.session_state` thuần.
-
-**Quản lý nhiều workspace (bảng `ai_tutor_workspaces`)**: thay vì chỉ 1
-workspace/link, sidebar giờ có selectbox liệt kê TẤT CẢ workspace đã tạo
-(`database.get_all_workspaces`), cho phép đổi tên (`rename_workspace`) và xóa
-hoàn toàn (`delete_workspace` — dọn sạch cả lịch sử chat, vector embedding,
-và bản ghi collection, không để lại rác trong Postgres). Sidebar cũng hiển
-thị danh sách file đã index trong workspace hiện tại
-(`database.get_indexed_files`, đọc từ `cmetadata->>'source'` — hỗ trợ cả vài
-tên khóa cũ như `file_name`/`filename`/`original_file` để tương thích ngược
-nếu schema metadata từng đổi tên).
-
-Khi xóa workspace đang mở, sidebar tự động chuyển sang workspace còn lại gần
-nhất (hoặc tạo mới nếu không còn workspace nào), tránh để người dùng rơi vào
-trạng thái "không có workspace nào" gây lỗi.
-
-## 4. Vì sao chuyển từ FAISS sang PostgreSQL + pgvector
-
-- **Persistent & multi-instance**: FAISS lưu ở đĩa cục bộ của container —
-  không dùng được khi scale ngang (nhiều Streamlit instance) hoặc khi
-  container bị redeploy. pgvector lưu trong Postgres, mọi instance đọc chung
-  một nguồn.
-- **Phân vùng dữ liệu tự nhiên**: mỗi collection trong pgvector có thể ứng
-  với 1 lớp học / 1 user / 1 môn học, và mỗi vector còn có `metadata` (JSONB)
-  để lọc chi tiết hơn (xem phần phân quyền bên dưới).
-- **Vận hành chuẩn**: backup, replication, monitoring dùng lại toàn bộ tooling
-  Postgres sẵn có, không cần quản lý riêng file `faiss_index/`.
+## 🧪 5. Kiểm thử tự động (Testing) & CI/CD
+* **Unit Testing**: Bộ test viết bằng `pytest` đạt độ cô lập cao nhờ mock toàn bộ kết nối DB và external API, không yêu cầu cấu hình phức tạp khi chạy test.
+* **CI/CD Pipeline**: Thiết lập GitHub Actions (`.github/workflows/ci.yml`) tự động chạy linter (`ruff`) và bộ test suite (`pytest`) trên mọi lệnh `push` hoặc `Pull Request`.
 
 ### Chạy Postgres + pgvector cục bộ (Docker)
 
@@ -192,180 +137,8 @@ volumes:
 `CREATE EXTENSION IF NOT EXISTS vector;` khi khởi động — chỉ cần user có
 quyền tạo extension (hoặc DBA tạo trước).
 
-## 5. Xử lý lỗi (error handling)
 
-- **Hệ thống exception riêng** (`exceptions.py`): `DatabaseConnectionError`,
-  `EmbeddingError`, `DocumentProcessingError`, `AgentError`... Mỗi tầng chỉ
-  raise đúng loại lỗi của mình, UI (`ui/*`, `app.py`) bắt `AITutorError` (lớp
-  cha) để hiển thị thông báo thân thiện, và bắt thêm `Exception` chung làm
-  lưới an toàn cuối cùng.
-- **Fail-fast khi khởi động**: `app._bootstrap()` kiểm tra cấu hình
-  (`get_config_error()`) và kết nối DB (`check_database_connection()`) một
-  lần duy nhất trước khi vẽ UI, tránh lỗi xuất hiện đột ngột giữa phiên chat.
-- **Retry có backoff cho embedding**: `database._add_batch` dùng `tenacity`
-  để retry tối đa 3 lần với backoff hàm mũ khi gọi Gemini embedding lỗi
-  (thường là rate-limit/timeout tạm thời) — thay cho `time.sleep(8)` cứng
-  trong bản gốc.
-- **Agent không bao giờ crash UI**: `agent.ask_agent()` bọc toàn bộ lời gọi
-  agent trong `try/except`, luôn trả về string (kể cả khi lỗi) để
-  `ui/chat.py` không cần xử lý ngoại lệ.
-
-## 6. Kiến trúc production-ready — góp ý mở rộng
-
-### 5.1. Mở rộng phân quyền (RBAC / multi-tenant)
-
-Bản refactor này đã đặt sẵn 2 "móc" (hook) cho phân quyền:
-
-1. `collection_name` truyền xuyên suốt `database.py` → `tools.py` →
-   `agent.py` → `app.py` (hiện đang dùng `session_id` ngẫu nhiên per-tab).
-2. `metadata_filter` / `metadata_common` gắn nhãn từng đoạn văn bản khi
-   index, và lọc lại khi truy vấn.
-
-Để lên production đa người dùng thật, đề xuất:
-
-```
-users            (id, email, hashed_password, role)          -- hoặc qua SSO/OAuth
-roles            (id, name)             -- 'student', 'teacher', 'admin'
-documents        (id, owner_id, title, collection_name, created_at)
-document_access  (document_id, subject_type, subject_id)      -- user hoặc role được phép xem
-```
-
-- Thay `_get_session_id()` trong `app.py` bằng `user_id` lấy từ middleware
-  xác thực thật (vd `streamlit-authenticator`, hoặc reverse-proxy OAuth2
-  đứng trước Streamlit, hoặc tách hẳn thành API FastAPI + frontend riêng nếu
-  cần OAuth chuẩn).
-- Khi index tài liệu (`ui/sidebar.py` → `database.index_text_chunks`), gắn
-  `metadata_common = {"owner_id": user_id, "allowed_roles": [...]}`.
-- Khi truy vấn (`tools.make_document_reader_tool`), build `metadata_filter`
-  từ user hiện tại: cho phép xem tài liệu của chính mình + tài liệu được
-  giáo viên share theo `document_access`.
-- Với yêu cầu bảo mật cao hơn (không tin tưởng filter ở tầng ứng dụng), cân
-  nhắc bật **Row-Level Security (RLS)** trực tiếp trên bảng
-  `langchain_pg_embedding` của Postgres, gắn với `current_setting('app.user_id')`
-  set qua mỗi connection.
-
-### 5.2. Bảo mật `python_math_tool`
-
-`PythonREPL` thực thi code Python tùy ý do LLM sinh ra. Trong production:
-- Chạy tool này trong container/sandbox riêng, không có quyền truy cập
-  mạng/filesystem ra ngoài (vd `gVisor`, `nsjail`, hoặc AWS Lambda tách biệt).
-- Giới hạn thời gian chạy (timeout) và tài nguyên (CPU/RAM).
-- Không expose kết quả stack trace chi tiết ra người dùng cuối.
-
-### 5.3. Khả năng mở rộng khác
-
-- **Caching**: cache câu trả lời cho các câu hỏi lặp lại theo
-  `(collection_name, question_hash)` bằng Redis, giảm chi phí gọi LLM.
-- **Observability**: thêm request ID xuyên suốt log (`config.get_logger`),
-  tích hợp LangSmith/OpenTelemetry để trace từng bước của agent.
-- **Testing**: `document_processor.py` và `database.py` không phụ thuộc
-  Streamlit — viết `pytest` với DB test (`testcontainers-python` +
-  `pgvector/pgvector` image) và file mẫu PDF/DOCX/TXT.
-- **CI/CD**: thêm `ruff`/`mypy` cho lint & type-check, chạy `py_compile` /
-  test suite trong pipeline trước khi deploy.
-- **Config theo môi trường**: tách `.env.development` / `.env.production`,
-  không commit file `.env` thật (chỉ commit `.env.example`).
-
-## 7. Cài đặt & chạy
-
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-cp .env.example .env
-# điền GOOGLE_API_KEY, COHERE_API_KEY, thông tin Postgres...
-
-# (nếu chưa có Postgres) chạy docker-compose ở mục 4, hoặc trỏ tới DB có sẵn
-
-streamlit run app.py
-```
-
-## 8. Deploy lên production
-
-### 8.1. Chạy bằng Docker (khuyến nghị)
-
-Đã có sẵn `Dockerfile`, `.dockerignore`, và `docker-compose.yml` (app +
-Postgres/pgvector) trong repo:
-
-```bash
-cp .env.example .env   # điền API key + mật khẩu DB thật
-docker compose up --build -d
-```
-
-`Dockerfile` **tải sẵn model embedding vào image lúc build** (không phải lúc
-chạy) — quan trọng vì nhiều nền tảng hosting dùng filesystem tạm thời, nếu
-không bake sẵn thì mỗi lần container khởi động lại sẽ tải lại model
-~1-2GB, làm cold-start rất chậm.
-
-### 8.2. Chọn nền tảng hosting
-
-| Nền tảng | Phù hợp không? | Lý do |
-|---|---|---|
-| **Streamlit Community Cloud** (free) | ⚠️ Rủi ro | Giới hạn ~1GB RAM/CPU thấp — `torch` + `bge-m3` load vào RAM có thể vượt hạn mức; cũng không có Postgres đi kèm, phải trỏ ra DB ngoài. Nếu vẫn muốn dùng, cân nhắc đổi sang model embedding nhỏ hơn (vd `paraphrase-multilingual-MiniLM-L12-v2`, nhẹ hơn nhiều so với `bge-m3`) |
-| **Railway / Render / Fly.io** | ✅ Phù hợp | Hỗ trợ Docker trực tiếp, có thể chọn gói RAM đủ cho `torch`; Railway/Render còn có addon Postgres (kiểm tra có bật được extension `pgvector` không) |
-| **VPS riêng (DigitalOcean, Hetzner...) + Docker** | ✅ Phù hợp nhất để kiểm soát | Toàn quyền chọn RAM/CPU, chạy `docker-compose.yml` y hệt local |
-| **Supabase / Neon (Postgres)** | ✅ Khuyến nghị cho DB | Có sẵn extension `pgvector`, có gói free — dùng làm `PG_HOST` thay vì tự host Postgres, giảm 1 phần việc vận hành |
-
-### 8.3. Trước khi đẩy code lên Git
-
-- **Đã thêm `.gitignore`** — đảm bảo `.env` (chứa API key thật, mật khẩu DB)
-  **không bao giờ được commit**. Chỉ commit `.env.example`.
-- Trên nền tảng hosting, khai báo `GOOGLE_API_KEY`, `COHERE_API_KEY`,
-  `PG_*` qua cơ chế **secrets/environment variables** của platform đó
-  (Railway/Render đều có mục "Environment Variables" riêng), không hard-code
-  trong code hay commit vào repo.
-- Nếu trước đó từng chạy thử và có thư mục `faiss_index/` (bản FAISS cũ) hoặc
-  `.venv/` trong repo, xoá khỏi Git history nếu đã lỡ commit
-  (`git rm -r --cached faiss_index .venv`) trước khi push.
-- CI/CD tối thiểu nên có: chạy `python -m py_compile` hoặc `ruff check` trên
-  mọi pull request trước khi merge, để bắt lỗi cú pháp sớm.
-
-## 9. Kiểm thử tự động (Testing) & CI/CD
-
-**Bộ test** nằm ở `tests/`, dùng `pytest`, chạy được **không cần Postgres/API
-thật** — mọi lời gọi ra ngoài (DB, Cohere, Gemini, model embedding) đều được
-mock (`unittest.mock`/`monkeypatch`), đúng nguyên tắc unit test: nhanh, không
-phụ thuộc mạng, không cần secrets thật.
-
-```bash
-pip install -r requirements.txt -r requirements-dev.txt
-pytest -v          # chạy toàn bộ test
-ruff check .        # lint
-```
-
-Phạm vi test hiện có:
-
-| File | Kiểm tra |
-|---|---|
-| `test_config.py` | Đọc biến môi trường, validate bắt buộc, giá trị mặc định |
-| `test_document_processor.py` | Trích xuất text, chunking, gắn metadata nguồn, fallback khi thiếu OCR, lỗi 1 file không chặn cả batch |
-| `test_database.py` | Thuật toán RRF (hybrid search), fallback vector-only khi full-text search lỗi, lưu/tải lịch sử chat không raise khi DB lỗi, **`index_chunks` với `metadata_common` bị bỏ trống (test hồi quy)**, **quản lý workspace** (`get_all_workspaces`, `ensure_workspace_exists`, `rename_workspace`, `delete_workspace` — đúng thứ tự dọn dẹp & không xóa nhầm workspace khác, `get_indexed_files` — lọc bỏ giá trị `None`) |
-| `test_tools.py` | Định dạng trích dẫn nguồn, fallback khi Cohere rerank lỗi, thông báo khi không tìm thấy tài liệu |
-| `test_agent.py` | Chuẩn hóa content (string/list), `ask_agent` không bao giờ raise, `stream_agent` chỉ lấy đúng token của node LLM cuối và fallback đúng khi streaming lỗi |
-| `test_app.py` | Phần LOGIC thuần trong `app.py` (không test UI/layout): resolve `workspace_id` từ URL, `_bootstrap` dừng đúng cách khi lỗi cấu hình/DB (`st.stop()`), cache agent theo workspace, tải lại lịch sử chat đúng lúc |
-
-`tests/conftest.py` stub package `langchain_huggingface` (kéo theo
-`sentence-transformers`/`torch`, rất nặng) và `streamlit`/`streamlit_pdf_viewer`
-(chưa cần cài trong môi trường test) bằng module giả — unit test logic
-nghiệp vụ không cần tải model thật hay chạy trong runtime Streamlit thật.
-Nhờ vậy `test_app.py` test được phần logic của `app.py` (resolve workspace,
-fail-fast, cache agent) mà không cần `streamlit` cài đặt — nhưng KHÔNG test
-phần vẽ UI (layout cột, nút toggle ẩn/hiện xem trước tài liệu), vì đó thuộc
-phạm vi test tích hợp (chạy `streamlit run app.py` thật và kiểm tra bằng tay,
-hoặc `streamlit.testing.v1.AppTest` nếu muốn tự động hóa sau này).
-**Test tích hợp thật** (cần Postgres + model thật chạy, xác nhận toàn bộ pipeline hoạt động end-to-end) nên viết
-riêng ở `tests/integration/`, dùng `testcontainers-python` với image
-`pgvector/pgvector:pg16`, và chỉ chạy khi cần (không bắt buộc trong CI mỗi
-lần push, vì chậm hơn nhiều).
-
-**CI/CD**: `.github/workflows/ci.yml` tự động chạy `ruff check` + `pytest`
-trên mọi push/PR vào nhánh `main`. Có lỗi lint hoặc test fail sẽ chặn merge
-nếu bạn bật branch protection rule yêu cầu check này pass trên GitHub. Mở
-rộng thêm khi cần: build & push Docker image lên registry sau khi CI pass,
-hoặc tự động deploy lên staging.
-
-## 10. Quan sát hệ thống (Observability)
+## 🔍 6. Quan sát hệ thống (Observability)
 
 **Log tự động gắn `workspace_id`**: `config.set_log_context(workspace_id)`
 được gọi 1 lần ở đầu `app.main()`, dùng `contextvars` (an toàn theo từng luồng
@@ -413,17 +186,3 @@ trang chủ LangSmith trước khi dùng cho production.
   tổng hợp.
 - Alert tự động khi tỷ lệ lỗi Cohere/Gemini vượt ngưỡng trong khoảng thời
   gian ngắn (dấu hiệu hết quota hoặc key hết hạn).
-
-## 11. Những điểm cần bạn tự xác nhận trước khi deploy
-
-- **Tên model Gemini** (`LLM_MODEL` trong `.env`, mặc định `gemini-3.1-flash-lite`):
-  Google thường xuyên đổi tên/khai tử model (vd `gemini-2.0-flash` đã ngừng
-  hoạt động từ 03/2026, các model Pro không còn free từ 04/2026) — hãy kiểm
-  tra danh sách model + quota hiện hành tại Google AI Studio trước khi chạy,
-  và chỉ cần đổi trong `.env`, không phải sửa code.
-- **Quota vẫn có giới hạn dù embedding đã chạy local**: các lệnh gọi LLM khi
-  chat (agent) và Cohere rerank vẫn tính theo quota API tương ứng. Nếu vẫn
-  hết quota nhanh, cân nhắc giới hạn số bước tool-calling của agent (mục 6.3),
-  cache câu trả lời, hoặc chuyển sang Vertex AI để có quota cao hơn.
-- Đảm bảo license/quyền dùng `DuckDuckGoSearchRun` phù hợp với volume truy
-  vấn dự kiến của bạn (free tier có thể bị rate-limit ở quy mô lớn).
