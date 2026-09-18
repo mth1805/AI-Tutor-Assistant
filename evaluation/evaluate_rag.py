@@ -23,7 +23,6 @@ def run_evaluation():
 
     dataset = Dataset.from_dict(data)
 
-    # 2. Cấu hình LLM làm giám khảo (sử dụng Gemini API key từ biến môi trường)
     evaluator_llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
 
     # 3. Chạy đánh giá

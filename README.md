@@ -31,18 +31,8 @@
 
 ---
 
-## 🚀 1. Tổng quan dự án & Vấn đề giải quyết
-**AI Tutor** là ứng dụng trợ lý học tập thông minh cho phép người dùng upload tài liệu (PDF, DOCX, TXT), lưu trữ vĩnh viễn trên Cloud Object Storage, quản lý không gian làm việc (workspace) thông minh qua URL và Database, thực hiện tìm kiếm kết hợp (Hybrid Search) và tương tác với AI Agent hỗ trợ gọi công cụ (Web Search, Python REPL, Document Reader).
-
-Dự án được thiết kế theo kiến trúc phân tầng (layered architecture) chuẩn **Production-Ready**, giải quyết các bài toán mà project ban đầu, AI Tutor RAG (có thể xem trong repo của tác giả) gặp phải :
-
-| Vấn đề ở bản gốc / Mô hình đơn giản | Giải pháp kiến trúc tại dự án này |
-|---|---|
-| Lưu file tạm trên đĩa local (mất khi container restart) | Tích hợp **Cloudflare R2 / AWS S3 (via `boto3`)** lưu trữ vĩnh viễn file gốc |
-| Sinh "workspace rác" liên tục khi người dùng chỉ load trang | Áp dụng cơ chế **Lazy Creation** (chỉ ghi nhận vào DB khi có tương tác thật) |thực tế
-| FAISS local, không scale được đa người dùng | Sử dụng **PostgreSQL + pgvector** (chuẩn hóa multi-instance, query vector tối ưu) |
-| Quota embedding API Gemini nhanh cạn kiệt | Chuyển đổi embedding sang local với **`intfloat/multilingual-e5-small`** đa ngôn ngữ |
-| Code dồn cục trong 1 file, không test được | Tách tầng rõ ràng, viết unit test toàn diện với `pytest` và CI tự động |
+## 🚀 1. Tổng quan dự án
+**AI Tutor** là ứng dụng trợ lý học tập thông minh cho phép người dùng upload tài liệu (PDF, DOCX, TXT), lưu trữ vĩnh viễn trên Cloud Object Storage, quản lý không gian làm việc (workspace) thông minh qua URL và Database, thực hiện tìm kiếm kết hợp (Hybrid Search) và tương tác với AI Agent hỗ trợ gọi công cụ (Web Search, Python REPL, Document Reader). Dự án được thiết kế theo kiến trúc phân tầng (layered architecture) chuẩn **Production-Ready**.
 
 ---
 
