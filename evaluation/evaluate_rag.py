@@ -1,32 +1,42 @@
-# Ví dụ cấu trúc phác thảo script đánh giá bằng Ragas
+import os
 from datasets import Dataset
 from ragas import evaluate
 from ragas.metrics import faithfulness, answer_relevance, context_precision
+from langchain_google_genai import ChatGoogleGenerativeAI
 
-# 1. Chuẩn bị tập dữ liệu test (Golden Test Dataset)
-data = {
-    "question": ["Thuật toán RRF trong project hoạt động thế nào?"],
-    "answer": [
-        "Thuật toán Reciprocal Rank Fusion kết hợp kết quả từ Vector Search và Full-Text Search..."
-    ],
-    "contexts": [
-        [
-            "Hybrid Search kết hợp Vector Search và PostgreSQL Full-Text Search thông qua Reciprocal Rank Fusion (RRF)..."
-        ]
-    ],
-    "ground_truth": [
-        "RRF kết hợp xếp hạng từ Vector Search và Full-Text Search để tối ưu kết quả tìm kiếm."
-    ],
-}
+def run_evaluation():
+    # 1. Chuẩn bị tập dữ liệu test mẫu (Golden Dataset)
+    data = {
+        "question": ["Thuật toán RRF trong hệ thống hoạt động thế nào?"],
+        "answer": [
+            "Thuật toán Reciprocal Rank Fusion kết hợp kết quả xếp hạng từ Vector Search và Full-Text Search..."
+        ],
+        "contexts": [
+            [
+                "Hybrid Search kết hợp Vector Search và PostgreSQL Full-Text Search thông qua Reciprocal Rank Fusion (RRF)..."
+            ]
+        ],
+        "ground_truth": [
+            "RRF kết hợp xếp hạng từ Vector Search và Full-Text Search để tối ưu kết quả tìm kiếm."
+        ],
+    }
 
-dataset = Dataset.from_dict(data)
+    dataset = Dataset.from_dict(data)
 
-# 2. Chạy đánh giá tự động các chỉ số
-# (Cần cấu hình LLM giám khảo, ví dụ ChatGoogleGenerativeAI)
-result = evaluate(
-    dataset=dataset,
-    metrics=[faithfulness, answer_relevance, context_precision],
-)
+    # 2. Cấu hình LLM làm giám khảo (sử dụng Gemini API key từ biến môi trường)
+    evaluator_llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
 
-# 3. Xuất kết quả báo cáo
-print(result)
+    # 3. Chạy đánh giá
+    print("Đang chạy đánh giá RAG tự động...")
+    result = evaluate(
+        dataset=dataset,
+        metrics=[faithfulness, answer_relevance, context_precision],
+        llm=evaluator_llm
+    )
+
+    print("Kết quả đánh giá:", result)
+    
+    # Có thể thêm logic kiểm tra ngưỡng điểm ở đây (Ví dụ: nếu điểm dưới 0.8 thì raise exception)
+
+if __name__ == "__main__":
+    run_evaluation()
