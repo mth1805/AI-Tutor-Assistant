@@ -69,7 +69,12 @@ def _ocr_pdf(file) -> str:
             txt = pytesseract.image_to_string(gray_img, lang="eng")
             if txt.strip():
                 text_parts.append(txt)
-                logger.info("-> OCR thành công trang %d/%d (Đã quét được %d ký tự).", idx + 1, len(images), len(txt.strip()))
+                logger.info(
+                    "-> OCR thành công trang %d/%d (Đã quét được %d ký tự).",
+                    idx + 1,
+                    len(images),
+                    len(txt.strip()),
+                )
             else:
                 logger.warning("-> Trang %d/%d không quét được chữ nào qua OCR.", idx + 1, len(images))
 
@@ -90,7 +95,11 @@ def _read_pdf(file) -> str:
         reader = PdfReader(file)
         raw_text = "".join(page.extract_text() or "" for page in reader.pages)
         if raw_text.strip():
-            logger.info("Đã trích xuất %d ký tự text thuần (selectable text) từ file '%s'.", len(raw_text.strip()), file_name)
+            logger.info(
+                "Đã trích xuất %d ký tự text thuần (selectable text) từ file '%s'.",
+                len(raw_text.strip()),
+                file_name,
+            )
             text_parts.append(raw_text)
         else:
             logger.info("File '%s' không có text thuần (hoặc hoàn toàn là file ảnh/scan).", file_name)
@@ -103,10 +112,16 @@ def _read_pdf(file) -> str:
         ocr_text = _ocr_pdf(file)
         if ocr_text.strip():
             text_parts.append(ocr_text)
-            logger.info("Đã bổ sung thêm %d ký tự từ OCR vào nội dung xử lý của file '%s'.", len(ocr_text.strip()), file_name)
+            logger.info(
+                "Đã bổ sung thêm %d ký tự từ OCR vào nội dung xử lý của file '%s'.",
+                len(ocr_text.strip()),
+                file_name,
+            )
 
     combined_text = "\n".join(text_parts)
-    logger.info("Tổng số lượng ký tự thu được sau khi xử lý file '%s' là: %d", file_name, len(combined_text.strip()))
+    logger.info(
+        "Tổng số lượng ký tự thu được sau khi xử lý file '%s' là: %d", file_name, len(combined_text.strip())
+    )
     return combined_text.replace("\x00", "")
 
 

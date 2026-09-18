@@ -1,12 +1,15 @@
-from utils.metrics import measure_latency
 import time
+
+from utils.metrics import measure_latency
+
 
 @measure_latency
 def run_hybrid_search(query: str, top_k: int = 5):
     """Thực hiện Hybrid Search (pgvector + RRF)"""
     # Truy vấn PostgreSQL, Vector Search, kết hợp RRF
-    time.sleep(0.15) 
+    time.sleep(0.15)
     return [{"chunk_id": 1, "text": "Nội dung mẫu..."}]
+
 
 @measure_latency
 def generate_llm_response(prompt: str):

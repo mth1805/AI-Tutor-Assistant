@@ -1,8 +1,8 @@
-import os
 from datasets import Dataset
-from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevance, context_precision
 from langchain_google_genai import ChatGoogleGenerativeAI
+from ragas import evaluate
+from ragas.metrics import answer_relevance, context_precision, faithfulness
+
 
 def run_evaluation():
     # 1. Chuẩn bị tập dữ liệu test mẫu (Golden Dataset)
@@ -28,14 +28,13 @@ def run_evaluation():
     # 3. Chạy đánh giá
     print("Đang chạy đánh giá RAG tự động...")
     result = evaluate(
-        dataset=dataset,
-        metrics=[faithfulness, answer_relevance, context_precision],
-        llm=evaluator_llm
+        dataset=dataset, metrics=[faithfulness, answer_relevance, context_precision], llm=evaluator_llm
     )
 
     print("Kết quả đánh giá:", result)
-    
+
     # Có thể thêm logic kiểm tra ngưỡng điểm ở đây (Ví dụ: nếu điểm dưới 0.8 thì raise exception)
+
 
 if __name__ == "__main__":
     run_evaluation()

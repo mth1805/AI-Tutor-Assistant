@@ -46,7 +46,7 @@ def get_llm() -> ChatGoogleGenerativeAI:
             temperature=app_config.llm_temperature,
             google_api_key=app_config.google_api_key,
             max_retries=5,  # Tự động retry tối đa 5 lần khi gặp lỗi 503/429
-            timeout=60,     # Thời gian timeout chờ phản hồi
+            timeout=60,  # Thời gian timeout chờ phản hồi
         )
     except Exception as e:
         logger.exception("Không thể khởi tạo Gemini LLM")
