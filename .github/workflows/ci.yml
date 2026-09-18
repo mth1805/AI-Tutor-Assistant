@@ -45,3 +45,9 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
         run: python evaluation/evaluate_rag.py
+
+      - name: Upload evaluation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-evaluation-report
+          path: evaluation/evaluation_results.json
