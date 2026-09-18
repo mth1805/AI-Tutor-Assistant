@@ -5,7 +5,7 @@ from pathlib import Path
 from datasets import Dataset
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from ragas import evaluate
-from ragas.embeddings import LangchainEmbeddings
+from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.metrics import answer_relevancy, context_precision, faithfulness
 
 
@@ -14,7 +14,6 @@ def run_evaluation():
     if not gemini_key:
         raise RuntimeError("GEMINI_API_KEY is missing.")
 
-    # Đọc tên model từ biến môi trường .env, mặc định là gemini-3.1-flash-lite nếu không tìm thấy
     model_name = os.getenv("LLM_MODEL", "gemini-3.1-flash-lite")
     print(f"Đang sử dụng LLM model cho Ragas: {model_name}")
 
@@ -35,15 +34,15 @@ def run_evaluation():
 
     dataset = Dataset.from_dict(data)
 
-    # 1. Khởi tạo LLM giám khảo lấy từ .env
+    # 1. Khởi tạo LLM giám khảo lấy từ biến môi trường
     evaluator_llm = ChatGoogleGenerativeAI(
         model=model_name,
         temperature=0,
         google_api_key=gemini_key
     )
 
-    # 2. Khởi tạo Embeddings bằng Gemini
-    evaluator_embeddings = LangchainEmbeddings(
+    # 2. Sử dụng LangchainEmbeddingsWrapper chuẩn xác theo phiên bản Ragas mới
+    evaluator_embeddings = LangchainEmbeddingsWrapper(
         embeddings=GoogleGenerativeAIEmbeddings(
             model="models/embedding-001",
             google_api_key=gemini_key
@@ -59,7 +58,7 @@ def run_evaluation():
         embeddings=evaluator_embeddings,
     )
 
-    # 4. Lưu kết quả ra file JSON cho CI/CD artifact
+    # 4. Xuất kết quả ra file JSON cho CI/CD artifact
     output_path = Path("evaluation/evaluation_results.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
