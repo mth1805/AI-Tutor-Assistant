@@ -29,8 +29,7 @@ torchvision
 # --- LLM (chat/agent) / Search ---
 langchain-google-genai>=2.0.0
 google-generativeai>=0.8.0
-ddgs            # backend tìm kiếm mà langchain_community.DuckDuckGoSearchRun
-                # dùng hiện nay (gói cũ "duckduckgo-search" đã đổi tên)
+ddgs            # DuckDuckGoSearchRun
 cohere
 langchain-cohere>=0.3.0
 
@@ -48,3 +47,5 @@ python-dotenv
 
 # -- S3/AWS ---
 boto3
+
+datasets
