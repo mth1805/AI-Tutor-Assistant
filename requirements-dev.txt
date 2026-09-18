@@ -5,4 +5,5 @@ pytest-mock
 ruff
 ragas
 datasets
-
+langchain-google-vertexai
+langchain-community
