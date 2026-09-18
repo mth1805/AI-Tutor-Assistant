@@ -47,5 +47,3 @@ python-dotenv
 
 # -- S3/AWS ---
 boto3
-
-datasets

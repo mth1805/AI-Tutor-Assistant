@@ -3,3 +3,6 @@
 pytest
 pytest-mock
 ruff
+ragas
+datasets
+
