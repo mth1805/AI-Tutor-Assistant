@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from datasets import Dataset
@@ -8,6 +9,13 @@ from ragas.metrics import answer_relevancy, context_precision, faithfulness
 
 
 def run_evaluation():
+    # Kiểm tra xem biến môi trường GEMINI_API_KEY đã được truyền vào chưa
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        raise RuntimeError(
+            "GEMINI_API_KEY is missing. Configure it in GitHub repository secrets."
+        )
+
     # 1. Chuẩn bị tập dữ liệu test mẫu (Golden Dataset)
     data = {
         "question": ["Thuật toán RRF trong hệ thống hoạt động thế nào?"],
@@ -26,8 +34,12 @@ def run_evaluation():
 
     dataset = Dataset.from_dict(data)
 
-    # 2. Cấu hình LLM làm giám khảo
-    evaluator_llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
+    # 2. Khởi tạo LLM giám khảo với API Key tường minh
+    evaluator_llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        temperature=0,
+        google_api_key=gemini_key
+    )
 
     # 3. Chạy đánh giá RAG tự động
     print("Đang chạy đánh giá RAG tự động...")
