@@ -3,7 +3,7 @@
 pytest
 pytest-mock
 ruff
-ragas
+ragas==0.2.15
 datasets
 langchain-google-vertexai
-langchain-community
+langchain-community==0.3.27
