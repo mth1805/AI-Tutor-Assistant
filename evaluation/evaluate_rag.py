@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
+
 from datasets import Dataset
 from langchain_google_genai import ChatGoogleGenerativeAI
 from ragas import evaluate
 from ragas.metrics import answer_relevancy, context_precision, faithfulness
+
 
 def run_evaluation():
     # 1. Chuẩn bị tập dữ liệu test mẫu (Golden Dataset)
@@ -40,7 +42,7 @@ def run_evaluation():
     # 4. Xuất kết quả thành file JSON để CI/CD upload artifact
     output_path = Path("evaluation/evaluation_results.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     output_path.write_text(
         json.dumps(result.to_pandas().to_dict(orient="records"), ensure_ascii=False, indent=2),
         encoding="utf-8",
