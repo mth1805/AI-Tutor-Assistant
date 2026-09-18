@@ -1,8 +1,9 @@
+import json
+from pathlib import Path
 from datasets import Dataset
 from langchain_google_genai import ChatGoogleGenerativeAI
 from ragas import evaluate
-from ragas.metrics import answer_relevance, context_precision, faithfulness
-
+from ragas.metrics import answer_relevancy, context_precision, faithfulness
 
 def run_evaluation():
     # 1. Chuẩn bị tập dữ liệu test mẫu (Golden Dataset)
@@ -23,18 +24,28 @@ def run_evaluation():
 
     dataset = Dataset.from_dict(data)
 
+    # 2. Cấu hình LLM làm giám khảo
     evaluator_llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
 
-    # 3. Chạy đánh giá
+    # 3. Chạy đánh giá RAG tự động
     print("Đang chạy đánh giá RAG tự động...")
     result = evaluate(
-        dataset=dataset, metrics=[faithfulness, answer_relevance, context_precision], llm=evaluator_llm
+        dataset=dataset,
+        metrics=[faithfulness, answer_relevancy, context_precision],
+        llm=evaluator_llm,
     )
 
     print("Kết quả đánh giá:", result)
 
-    # Có thể thêm logic kiểm tra ngưỡng điểm ở đây (Ví dụ: nếu điểm dưới 0.8 thì raise exception)
-
+    # 4. Xuất kết quả thành file JSON để CI/CD upload artifact
+    output_path = Path("evaluation/evaluation_results.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    output_path.write_text(
+        json.dumps(result.to_pandas().to_dict(orient="records"), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"Đã lưu báo cáo đánh giá vào {output_path}")
 
 if __name__ == "__main__":
     run_evaluation()

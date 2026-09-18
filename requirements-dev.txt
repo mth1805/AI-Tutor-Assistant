@@ -4,6 +4,6 @@ pytest
 pytest-mock
 ruff
 ragas==0.2.15
-datasets
+datasets<3
 langchain-google-vertexai
 langchain-community==0.3.27
