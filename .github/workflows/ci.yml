@@ -36,3 +36,12 @@ jobs:
           GOOGLE_API_KEY: ci-fake-key
           COHERE_API_KEY: ci-fake-key
         run: pytest -v
+
+      - name: Run RAG evaluation
+        env:
+          PG_USER: ci_user
+          PG_PASSWORD: ci_password
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+        run: python evaluation/evaluate_rag.py
