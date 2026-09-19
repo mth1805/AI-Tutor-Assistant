@@ -6,7 +6,7 @@ qua pipeline của app (`database.hybrid_search` + `agent.ask_agent`) thay vì
 dùng answer/context viết tay.
 
 Yêu cầu trước khi chạy:
-1. Đã index sẵn tài liệu tương ứng bộ câu hỏi bên dưới vào 1 collection cụ thể. 
+1. Đã index sẵn tài liệu tương ứng bộ câu hỏi bên dưới vào 1 collection cụ thể.
 Chạy: python -m evaluation.evaluate_rag
 """
 from __future__ import annotations
