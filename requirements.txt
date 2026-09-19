@@ -3,10 +3,10 @@ streamlit
 streamlit-pdf-viewer
 
 # --- Document parsing ---
-pypdf              # thay cho PyPDF2 (đã ngừng bảo trì)
+pypdf
 python-docx
 
-# --- OCR cho PDF dạng ảnh scan (tùy chọn, tự bỏ qua nếu thiếu) ---
+# --- OCR cho PDF dạng ảnh scan ---
 # Cần thêm gói hệ thống poppler-utils + tesseract-ocr — xem packages.txt
 # (Streamlit Community Cloud tự đọc file này để cài qua apt).
 pdf2image
@@ -15,24 +15,27 @@ pytesseract
 # --- Database / vector store (PostgreSQL + pgvector) ---
 psycopg[binary]    # driver Postgres v3, cần cho langchain-postgres
 pgvector
-langchain-postgres
+# This project uses the LangChain 0.3 API.  0.0.12 explicitly requires
+# langchain-core<0.4, so do not let pip select the newer 1.x integration.
+langchain-postgres==0.0.12
 
-# --- Retry/backoff (lưới an toàn cho batch embedding) ---
+# --- Retry/backoff ---
 tenacity
 
-# --- Embedding LOCAL (không tốn quota API) ---
-langchain-huggingface
+# --- Embedding LOCAL ---
+langchain-huggingface==0.1.2
 sentence-transformers
 torch      
 torchvision
 
 # --- LLM (chat/agent) / Search ---
+ # 3.x requires langchain-core>=1.0; the application is written for 0.3.x.
 langchain-google-genai==2.0.10
-google-generativeai>=0.8.0
+google-generativeai>=0.8.0,<0.9.0
 ddgs
 duckduckgo-search>=6,<8
 cohere
-langchain-cohere>=0.3.0
+langchain-cohere==0.3.4
 
 # --- LangChain / LangGraph core ---
 langchain==0.3.27
@@ -40,7 +43,9 @@ langchain-core==0.3.72
 langchain-text-splitters==0.3.9
 langchain-community==0.3.27
 langchain-experimental==0.3.4
-langgraph
+# Keep LangGraph on the last compatible 0.x line.  Leaving this unpinned
+# allows pip to select LangGraph 1.x, which requires langchain-core>=1.0.
+langgraph==0.3.34
 
 # --- Config ---
 python-dotenv

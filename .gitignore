@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.venv-eval/
 .pytest_cache/
 
 # --- Secrets / môi trường ---
@@ -22,3 +23,7 @@ faiss_index/           # bản cũ dùng FAISS, không còn dùng nữa nhưng p
 -e 
 # --- Lint cache ---
 .ruff_cache/
+
+# --- Evaluate ---
+evaluation_results.json
+

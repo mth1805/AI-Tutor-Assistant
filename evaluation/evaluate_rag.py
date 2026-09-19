@@ -5,19 +5,8 @@ Nhóm 1: đánh giá chất lượng RAG (retrieval + answer) bằng RAGAS — C
 qua pipeline của app (`database.hybrid_search` + `agent.ask_agent`) thay vì
 dùng answer/context viết tay.
 
-QUAN TRỌNG: bản trước của script này viết tay cả "answer" lẫn "contexts",
-khiến RAGAS chỉ đo độ nhất quán giữa 2 đoạn text tự soạn với nhau — không hề
-phản ánh chất lượng hệ thống thật. Bản này CHỈ viết tay "question" và
-"ground_truth" (bộ câu hỏi + đáp án chuẩn); "answer" và "contexts" LUÔN được
-lấy từ việc gọi thật vào pipeline.
-
 Yêu cầu trước khi chạy:
-  1. .env đã có GOOGLE_API_KEY, COHERE_API_KEY, PG_* trỏ đúng Postgres.
-  2. Đã index sẵn tài liệu tương ứng bộ câu hỏi bên dưới vào 1 collection cụ
-     thể (mặc định 'eval_collection', đổi qua biến EVAL_COLLECTION). Ví dụ:
-     upload đúng tài liệu chứa nội dung về RRF/CTE/TCP-UDP/Word2Vec vào
-     workspace có ID trùng EVAL_COLLECTION trước khi chạy script này.
-
+1. Đã index sẵn tài liệu tương ứng bộ câu hỏi bên dưới vào 1 collection cụ thể. 
 Chạy: python -m evaluation.evaluate_rag
 """
 from __future__ import annotations
@@ -29,22 +18,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from datasets import Dataset  # noqa: E402
-from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: E402
-from ragas import evaluate  # noqa: E402
-from ragas.embeddings import LangchainEmbeddingsWrapper  # noqa: E402
-from ragas.metrics import answer_relevancy, context_precision, faithfulness  # noqa: E402
+from datasets import Dataset
+from langchain_google_genai import ChatGoogleGenerativeAI
+from ragas import evaluate
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.metrics import answer_relevancy, context_precision, faithfulness
 
-from agent import ask_agent, build_agent  # noqa: E402
-from config import app_config, get_config_error  # noqa: E402
-from database import get_embeddings, hybrid_search  # noqa: E402
+from agent import ask_agent, build_agent
+from config import app_config, get_config_error
+from database import get_embeddings, hybrid_search
 
 EVAL_COLLECTION = os.getenv("EVAL_COLLECTION", "eval_collection")
 MIN_SCORE = float(os.getenv("RAGAS_MIN_SCORE", "0.6"))
 
-# CHỈ 2 trường này được viết tay: câu hỏi + đáp án chuẩn (ground truth).
-# "answer" và "contexts" KHÔNG được viết tay ở đây — luôn lấy từ pipeline
-# thật (xem _run_pipeline_for_question), nếu không kết quả đánh giá vô nghĩa.
+# câu hỏi + đáp án chuẩn (ground truth).
 EVAL_QUESTIONS = [
     {
         "question": "Thuật toán RRF trong hệ thống Hybrid Search hoạt động thế nào?",
@@ -107,12 +94,6 @@ def run_evaluation() -> None:
         }
     )
 
-    # Dùng CÙNG LLM app đang dùng thật (đo đúng chất lượng model thật đang
-    # chạy), và embedding LOCAL (bge-m3, giống hệt app) thay vì gọi thêm 1
-    # model embedding Gemini riêng cho việc chấm điểm — lý do:
-    #   1. Không tốn thêm quota Gemini chỉ để evaluate.
-    #   2. "models/embedding-001" ở bản trước là model cũ/dễ deprecated —
-    #      đây chính là nguyên nhân answer_relevancy=NaN toàn bộ ở kết quả cũ.
     evaluator_llm = ChatGoogleGenerativeAI(
         model=app_config.llm_model,
         temperature=0,
@@ -141,8 +122,7 @@ def run_evaluation() -> None:
         print(f"  {metric:<20}{score:.3f}")
     print(f"\nChi tiết từng câu hỏi đã lưu vào {output_path}")
 
-    # Cổng chất lượng cho CI: fail build nếu điểm dưới ngưỡng, thay vì chỉ
-    # xuất báo cáo rồi không ai đọc.
+    # Cổng chất lượng cho CI: fail build nếu điểm dưới ngưỡng
     failed = {m: s for m, s in summary.items() if s == s and s < MIN_SCORE}  # s==s loại NaN
     if failed:
         print(f"\n❌ Các chỉ số dưới ngưỡng tối thiểu {MIN_SCORE} (đặt qua RAGAS_MIN_SCORE): {failed}")

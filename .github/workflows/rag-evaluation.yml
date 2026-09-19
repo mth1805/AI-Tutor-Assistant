@@ -1,0 +1,79 @@
+name: RAG evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      collection:
+        description: PostgreSQL vector collection that has already been indexed
+        required: false
+        default: eval_collection
+        type: string
+  schedule:
+    - cron: "0 2 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rag-evaluation
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: Evaluate indexed RAG collection
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Use an isolated database that already contains the evaluation corpus;
+      # do not run against the ephemeral PostgreSQL service used by ci.yml.
+      PG_HOST: ${{ secrets.EVAL_PG_HOST }}
+      PG_PORT: ${{ secrets.EVAL_PG_PORT || '5432' }}
+      PG_DATABASE: ${{ secrets.EVAL_PG_DATABASE }}
+      PG_USER: ${{ secrets.EVAL_PG_USER }}
+      PG_PASSWORD: ${{ secrets.EVAL_PG_PASSWORD }}
+      PG_COLLECTION: ${{ inputs.collection || 'eval_collection' }}
+      EVAL_COLLECTION: ${{ inputs.collection || 'eval_collection' }}
+      GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      LLM_MODEL: gemini-1.5-flash
+      RAGAS_MIN_SCORE: "0.6"
+      EMBEDDING_DEVICE: cpu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-eval.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-eval.txt
+          python -m pip check
+
+      - name: Validate evaluation configuration
+        run: |
+          test -n "$PG_HOST"
+          test -n "$PG_DATABASE"
+          test -n "$PG_USER"
+          test -n "$PG_PASSWORD"
+          test -n "$GOOGLE_API_KEY"
+          test -n "$COHERE_API_KEY"
+
+      - name: Run RAG evaluation
+        run: python -m evaluation.evaluate_rag
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-evaluation-report
+          path: evaluation/evaluation_results.json
+          if-no-files-found: warn
+          retention-days: 30

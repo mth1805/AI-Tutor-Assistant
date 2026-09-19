@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt -r requirements-eval.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Lint
         run: ruff check .
@@ -52,22 +52,3 @@ jobs:
           GOOGLE_API_KEY: ci-fake-key
           COHERE_API_KEY: ci-fake-key
         run: pytest -v
-
-      - name: Run RAG evaluation
-        env:
-          PG_HOST: 127.0.0.1
-          PG_PORT: 5432
-          PG_DATABASE: ai_tutor
-          PG_USER: ci_user
-          PG_PASSWORD: ci_password
-          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
-          LLM_MODEL: gemini-1.5-flash
-        run: python evaluation/evaluate_rag.py
-
-      - name: Upload evaluation report
-        uses: actions/upload-artifact@v4
-        with:
-          name: rag-evaluation-report
-          path: evaluation/evaluation_results.json

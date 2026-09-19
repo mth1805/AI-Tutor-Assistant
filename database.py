@@ -11,11 +11,11 @@ Quản lý toàn bộ tương tác với PostgreSQL + pgvector thông qua LangCh
 Tách biệt hoàn toàn khỏi UI và Agent để có thể unit test độc lập, và tái sử
 dụng trong script batch-import tài liệu chạy ngoài Streamlit.
 """
-
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
-from functools import lru_cache
+from functools import lru_cache, wraps
 
 import psycopg
 from langchain_core.documents import Document
@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 
 CHAT_TABLE = "ai_tutor_chat_messages"
 WORKSPACE_TABLE = "ai_tutor_workspaces"
-
+METRICS_TABLE = "ai_tutor_metrics"
 
 def _connect() -> psycopg.Connection:
     return psycopg.connect(
@@ -72,6 +72,26 @@ def check_database_connection() -> None:
                     );
                     """
                 )
+                # Bảng quan sát (nhóm 2: hiệu năng, nhóm 3: chi phí/lượt gọi).
+                # Mỗi lời gọi 1 thao tác "tốn tài nguyên" (LLM, embedding, rerank,
+                # search...) ghi 1 dòng — cho phép tính p50/p95 latency và đếm
+                # số lượt gọi/ngày để đối chiếu với hạn mức free-tier.
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {METRICS_TABLE} (
+                        id SERIAL PRIMARY KEY,
+                        operation TEXT NOT NULL,
+                        duration_seconds DOUBLE PRECISION NOT NULL,
+                        success BOOLEAN NOT NULL DEFAULT TRUE,
+                        workspace_id TEXT,
+                        created_at TIMESTAMPTZ DEFAULT now()
+                    );
+                    """
+                )
+                cur.execute(
+                    f"CREATE INDEX IF NOT EXISTS idx_{METRICS_TABLE}_operation_time "
+                    f"ON {METRICS_TABLE} (operation, created_at);"
+                )
         logger.info("Kết nối PostgreSQL/pgvector thành công.")
     except psycopg.OperationalError as e:
         logger.error("Không thể kết nối PostgreSQL: %s", e)
@@ -104,8 +124,6 @@ def get_embeddings() -> HuggingFaceEmbeddings:
     Streamlit chạy lại toàn bộ script mỗi lần tương tác, nên nếu không cache,
     model sẽ bị nạp lại liên tục làm chậm UI.
     """
-    if app_config is None:
-        raise EmbeddingError("App config is not initialized.")
     try:
         return HuggingFaceEmbeddings(
             model_name=app_config.embedding_model,
@@ -121,9 +139,6 @@ def get_embeddings() -> HuggingFaceEmbeddings:
 
 def get_vector_store(collection_name: str | None = None) -> PGVector:
     """Trả về 1 PGVector store gắn với 1 collection cụ thể (tạo mới nếu chưa có)."""
-    if collection_name is None:
-        logger.warning("CẢNH BÁO: collection_name bị None!")
-
     embeddings = get_embeddings()
     try:
         return PGVector(
@@ -135,6 +150,83 @@ def get_vector_store(collection_name: str | None = None) -> PGVector:
     except Exception as e:  # noqa: BLE001
         logger.exception("Không thể khởi tạo PGVector store.")
         raise DatabaseConnectionError(f"Không thể khởi tạo kho vector: {e}") from e
+
+
+# ---------------------------------------------------------------------------
+# Metrics quan sát (nhóm 2: hiệu năng & độ tin cậy, nhóm 3: chi phí/lượt gọi)
+# ---------------------------------------------------------------------------
+
+
+def record_metric(
+    operation: str,
+    duration_seconds: float,
+    *,
+    success: bool = True,
+    workspace_id: str | None = None,
+) -> None:
+    """Ghi 1 điểm dữ liệu quan sát vào Postgres. Lỗi ghi KHÔNG được raise —
+    thu thập metric không bao giờ được làm gián đoạn tính năng chính của app."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"INSERT INTO {METRICS_TABLE} "
+                    f"(operation, duration_seconds, success, workspace_id) "
+                    f"VALUES (%s, %s, %s, %s);",
+                    (operation, duration_seconds, success, workspace_id),
+                )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Không thể ghi metric '%s': %s", operation, e)
+
+
+def track_metric(operation: str):
+    """Decorator: đo thời gian thực thi + ghi vào bảng `ai_tutor_metrics`.
+
+    Khác với `config.log_duration` (chỉ in ra log, không lưu trữ),
+    `track_metric` lưu vào Postgres để `evaluation/report_metrics.py` có thể
+    tổng hợp thành số liệu (p50/p95 latency, tỷ lệ lỗi, số lượt gọi/ngày) sau
+    này — dùng CẢ HAI (xếp chồng 2 decorator) khi cần vừa xem log tức thời,
+    vừa có lịch sử để phân tích lâu dài.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            success = True
+            try:
+                return func(*args, **kwargs)
+            except Exception:
+                success = False
+                raise
+            finally:
+                record_metric(operation, time.perf_counter() - start, success=success)
+
+        return wrapper
+
+    return decorator
+
+
+def fetch_recent_metrics(days: int = 7) -> list[tuple[str, float, bool]]:
+    """Lấy các dòng metric trong N ngày gần nhất, dùng cho báo cáo hiệu năng
+    (nhóm 2) và chi phí/lượt gọi (nhóm 3) ở `evaluation/report_metrics.py`.
+    Trả về [] nếu lỗi thay vì raise, vì đây là công cụ báo cáo phụ trợ."""
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT operation, duration_seconds, success
+                    FROM {METRICS_TABLE}
+                    WHERE created_at >= now() - (%s || ' days')::interval
+                    ORDER BY created_at;
+                    """,
+                    (days,),
+                )
+                return cur.fetchall()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Không thể tải dữ liệu metrics: %s", e)
+        return []
 
 
 @retry(
@@ -151,6 +243,7 @@ def _add_batch(store: PGVector, texts: list[str], metadatas: list[dict]) -> None
 
 
 @log_duration("index_chunks")
+@track_metric("index_chunks")
 def index_chunks(
     chunks: list[TextChunk],
     *,
@@ -169,24 +262,16 @@ def index_chunks(
         logger.warning("Không có đoạn văn bản nào để index.")
         return
 
-    # Tự động ghi nhận workspace vào DB khi người dùng bấm xử lý tài liệu
-    active_ws = collection_name or db_config.collection_name
-    ensure_workspace_exists(active_ws, f"Workspace {active_ws[-8:]}")
-
+    # QUAN TRỌNG: phải gán giá trị mặc định TRƯỚC khi dùng bên dưới — gọi
+    # index_chunks(chunks) mà không truyền metadata_common (None) rồi
+    # dict.update(None) ngay sau đó sẽ raise TypeError. Đây từng là 1 bug
+    # thật, có test hồi quy ở tests/test_database.py.
     metadata_common = metadata_common or {}
 
     for chunk in chunks:
-        # Nếu chunk chưa có metadata, tạo mới
         if not chunk.metadata:
             chunk.metadata = {}
-
-        # Chỉ lấy 'source' từ chunk, sau đó cập nhật thêm 'workspace_id' vào
-        source = chunk.metadata.get("source", "unknown")
-        chunk.metadata = {"source": source}
         chunk.metadata.update(metadata_common)
-
-    if app_config is None:
-        raise EmbeddingError("App config is not initialized.")
 
     store = get_vector_store(collection_name)
     batch_size = batch_size or app_config.embedding_batch_size
@@ -270,7 +355,9 @@ def _keyword_search(
     return results
 
 
-def _reciprocal_rank_fusion(result_lists: list[list[Document]], *, k: int, rrf_k: int = 60) -> list[Document]:
+def _reciprocal_rank_fusion(
+    result_lists: list[list[Document]], *, k: int, rrf_k: int = 60
+) -> list[Document]:
     """Gộp nhiều danh sách kết quả xếp hạng khác nhau (vector, keyword) thành
     1 danh sách duy nhất bằng công thức RRF: score = sum(1 / (rrf_k + rank))."""
     scores: dict[str, float] = {}
@@ -284,6 +371,8 @@ def _reciprocal_rank_fusion(result_lists: list[list[Document]], *, k: int, rrf_k
     return [doc_map[key] for key in ranked_keys[:k]]
 
 
+@log_duration("hybrid_search")
+@track_metric("hybrid_search")
 def hybrid_search(
     query: str,
     *,
@@ -320,9 +409,6 @@ def save_chat_message(workspace_id: str, role: str, content: str) -> None:
     """Lưu 1 tin nhắn vào lịch sử chat. Lỗi ở đây KHÔNG raise ra ngoài —
     mất khả năng lưu lịch sử không nên làm gián đoạn cuộc trò chuyện hiện tại."""
     try:
-        # Tự động tạo workspace trong DB ngay khi người dùng bắt đầu nhắn tin câu đầu tiên
-        ensure_workspace_exists(workspace_id, f"Workspace {workspace_id[-8:]}")
-
         with _connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -349,7 +435,6 @@ def get_chat_history(workspace_id: str, limit: int = 200) -> list[dict]:
     except Exception:  # noqa: BLE001
         logger.exception("Không thể tải lịch sử chat cho workspace '%s'.", workspace_id)
         return []
-
 
 @log_duration("get_all_workspaces")
 def get_all_workspaces() -> list[dict]:
@@ -402,18 +487,16 @@ def rename_workspace(workspace_id: str, new_title: str) -> None:
 
 @log_duration("delete_workspace")
 def delete_workspace(workspace_id: str) -> None:
-    """Xóa sạch mọi dữ liệu liên quan đến workspace: tin nhắn, embedding, và collection."""
+    """Xóa hoàn toàn workspace, lịch sử chat và các vector tài liệu đã index."""
     try:
         with _connect() as conn:
             with conn.cursor() as cur:
-                # 1. Xóa lịch sử chat (không có ràng buộc FK nên xóa thoải mái)
+                # 1. Xóa lịch sử chat
                 cur.execute(f"DELETE FROM {CHAT_TABLE} WHERE workspace_id = %s;", (workspace_id,))
-
+                chat_deleted = cur.rowcount
                 # 2. Xóa bảng quản lý workspace
                 cur.execute(f"DELETE FROM {WORKSPACE_TABLE} WHERE workspace_id = %s;", (workspace_id,))
-
-                # 3. Xóa các đoạn vector embedding
-                # Phải xóa embedding trước vì nó có khóa ngoại tham chiếu đến collection
+                # 3. Xóa các đoạn vector embedding thuộc collection của workspace này
                 cur.execute(
                     """
                     DELETE FROM langchain_pg_embedding
@@ -423,25 +506,24 @@ def delete_workspace(workspace_id: str) -> None:
                     """,
                     (workspace_id,),
                 )
-
-                # 4. Xóa collection tương ứng (sau khi embedding con đã bị xóa)
+                vectors_deleted = cur.rowcount
+                # 4. Xóa collection tương ứng
                 cur.execute(
                     "DELETE FROM langchain_pg_collection WHERE name = %s;",
                     (workspace_id,),
                 )
-
-                if hasattr(conn, "commit"):
-                    conn.commit()
-
-        logger.info("Đã xóa hoàn toàn workspace '%s' và dữ liệu liên quan.", workspace_id)
-    except Exception as e:
-        logger.exception("Lỗi khi xóa workspace '%s': %s", workspace_id, e)
+        logger.info(
+            "Đã xóa workspace '%s': %d tin nhắn chat, %d vector.",
+            workspace_id, chat_deleted, vectors_deleted,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Không thể xóa workspace '%s'", workspace_id)
         raise DatabaseConnectionError(f"Không thể xóa workspace: {e}") from e
 
 
 @log_duration("get_indexed_files")
 def get_indexed_files(workspace_id: str) -> list[str]:
-    """Lấy danh sách tên file đã được index từ metadata JSONB."""
+    """Lấy danh sách tên file đã được index trong workspace từ metadata."""
     try:
         with _connect() as conn:
             with conn.cursor() as cur:
@@ -457,11 +539,9 @@ def get_indexed_files(workspace_id: str) -> list[str]:
                     (workspace_id,),
                 )
                 rows = cur.fetchall()
-
-        # Lọc bỏ giá trị None và trả về danh sách
         files = [r[0] for r in rows if r[0]]
-        logger.debug("Workspace '%s' có %d file: %s", workspace_id, len(files), files)
+        logger.debug("Workspace '%s' có %d file đã index: %s", workspace_id, len(files), files)
         return files
-    except Exception as e:
-        logger.warning("Không thể lấy danh sách file của workspace '%s': %s", workspace_id, e)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Không thể lấy danh sách file của workspace: %s", e)
         return []

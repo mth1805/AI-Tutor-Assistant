@@ -1,7 +1,5 @@
 """Test app.py: chỉ nhắm vào LOGIC thuần (workspace resolution, bootstrap
-fail-fast, cache agent, tải trạng thái workspace) — không test phần vẽ UI
-(layout cột, nút toggle ẩn/hiện xem trước) vì đó là phạm vi test tích hợp
-(xem README, mục Testing)."""
+fail-fast, cache agent, tải trạng thái workspace)."""
 
 from __future__ import annotations
 
