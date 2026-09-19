@@ -1,14 +1,30 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [main]
+    branches: [ "main", "master" ]
 
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: ai_tutor
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d ai_tutor"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,21 +32,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt -r requirements-eval.txt
 
-      - name: Lint (ruff)
+      - name: Lint
         run: ruff check .
 
       - name: Run tests
         env:
-          # Giá trị giả để config.py không lỗi khi import — bộ test đã mock
-          # toàn bộ lời gọi API/DB thật (xem tests/conftest.py), không cần
-          # key/DB thật để chạy CI.
+          PG_HOST: 127.0.0.1
+          PG_PORT: 5432
+          PG_DATABASE: ai_tutor
           PG_USER: ci_user
           PG_PASSWORD: ci_password
           GOOGLE_API_KEY: ci-fake-key
@@ -39,11 +55,15 @@ jobs:
 
       - name: Run RAG evaluation
         env:
+          PG_HOST: 127.0.0.1
+          PG_PORT: 5432
+          PG_DATABASE: ai_tutor
           PG_USER: ci_user
           PG_PASSWORD: ci_password
           GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          LLM_MODEL: gemini-1.5-flash
         run: python evaluation/evaluate_rag.py
 
       - name: Upload evaluation report
@@ -51,8 +71,3 @@ jobs:
         with:
           name: rag-evaluation-report
           path: evaluation/evaluation_results.json
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
