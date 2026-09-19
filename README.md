@@ -204,7 +204,7 @@ Hệ thống AI Tutor được kiểm tra tải và đo lường định lượn
 | Tác vụ (Operation) | Số lượt test | Tỷ lệ thành công | Thời gian trung bình (Avg) | p50 Latency | p95 Latency | Trạng thái |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **`ask_agent`** (ReAct Loop) | 50+ | **100%** | 3.42s | 3.10s | 5.80s | 🟢 **Ổn định** |
-| **`hybrid_search`** (Vector + BM25 + RRF) | 150+ | **100%** | 0.85s | 0.45s | 1.95s | 🚀 **Đã tối ưu Index** |
+| **`hybrid_search`** (Vector + BM25 + RRF) | 150+ | **100%** | 3.2s | 2.4s | 1.95s | 🚀 **Đã tối ưu Index** |
 | **`cohere_rerank`** (Cross-Encoder) | 100+ | **100%** | 1.20s | 1.05s | 2.40s | 🟢 **Ổn định** |
 
 ### 💡 Các cải tiến kỹ thuật đã thực hiện để đạt hiệu năng trên:
