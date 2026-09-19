@@ -1,76 +1,126 @@
+"""
+evaluation/evaluate_rag.py
+---------------------------
+Nhóm 1: đánh giá chất lượng RAG (retrieval + answer) bằng RAGAS — CHẠY THẬT
+qua pipeline của app (`database.hybrid_search` + `agent.ask_agent`) thay vì
+dùng answer/context viết tay.
+
+QUAN TRỌNG: bản trước của script này viết tay cả "answer" lẫn "contexts",
+khiến RAGAS chỉ đo độ nhất quán giữa 2 đoạn text tự soạn với nhau — không hề
+phản ánh chất lượng hệ thống thật. Bản này CHỈ viết tay "question" và
+"ground_truth" (bộ câu hỏi + đáp án chuẩn); "answer" và "contexts" LUÔN được
+lấy từ việc gọi thật vào pipeline.
+
+Yêu cầu trước khi chạy:
+  1. .env đã có GOOGLE_API_KEY, COHERE_API_KEY, PG_* trỏ đúng Postgres.
+  2. Đã index sẵn tài liệu tương ứng bộ câu hỏi bên dưới vào 1 collection cụ
+     thể (mặc định 'eval_collection', đổi qua biến EVAL_COLLECTION). Ví dụ:
+     upload đúng tài liệu chứa nội dung về RRF/CTE/TCP-UDP/Word2Vec vào
+     workspace có ID trùng EVAL_COLLECTION trước khi chạy script này.
+
+Chạy: python -m evaluation.evaluate_rag
+"""
+from __future__ import annotations
+
 import json
 import os
+import sys
 from pathlib import Path
 
-from datasets import Dataset
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from ragas import evaluate
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.metrics import answer_relevancy, context_precision, faithfulness
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from datasets import Dataset  # noqa: E402
+from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: E402
+from ragas import evaluate  # noqa: E402
+from ragas.embeddings import LangchainEmbeddingsWrapper  # noqa: E402
+from ragas.metrics import answer_relevancy, context_precision, faithfulness  # noqa: E402
+
+from agent import ask_agent, build_agent  # noqa: E402
+from config import app_config, get_config_error  # noqa: E402
+from database import get_embeddings, hybrid_search  # noqa: E402
+
+EVAL_COLLECTION = os.getenv("EVAL_COLLECTION", "eval_collection")
+MIN_SCORE = float(os.getenv("RAGAS_MIN_SCORE", "0.6"))
+
+# CHỈ 2 trường này được viết tay: câu hỏi + đáp án chuẩn (ground truth).
+# "answer" và "contexts" KHÔNG được viết tay ở đây — luôn lấy từ pipeline
+# thật (xem _run_pipeline_for_question), nếu không kết quả đánh giá vô nghĩa.
+EVAL_QUESTIONS = [
+    {
+        "question": "Thuật toán RRF trong hệ thống Hybrid Search hoạt động thế nào?",
+        "ground_truth": "RRF kết hợp kết quả xếp hạng từ Vector Search và Full-Text "
+        "Search dựa trên công thức nghịch đảo thứ hạng.",
+    },
+    {
+        "question": "Làm cách nào để viết Recursive CTE trong PostgreSQL để xử lý dữ liệu phân cấp?",
+        "ground_truth": "Sử dụng cấu trúc WITH RECURSIVE với anchor member và "
+        "recursive member nối bằng UNION ALL trong PostgreSQL.",
+    },
+    {
+        "question": "Sự khác biệt chính giữa giao thức TCP và UDP trong mạng máy tính là gì?",
+        "ground_truth": "TCP có thiết lập kết nối và đảm bảo độ tin cậy, còn UDP là "
+        "giao thức phi kết nối tốc độ nhanh.",
+    },
+    {
+        "question": "Mô hình Word2Vec với kiến trúc Skip-gram hoạt động ra sao?",
+        "ground_truth": "Skip-gram trong Word2Vec dùng từ trung tâm để dự đoán các "
+        "từ ngữ cảnh xung quanh.",
+    },
+]
 
 
-def run_evaluation():
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_key:
-        raise RuntimeError("GEMINI_API_KEY is missing.")
+def _run_pipeline_for_question(agent, question: str) -> tuple[str, list[str]]:
+    """Chạy THẬT qua retrieval + agent của app — đây là phần bản trước bỏ
+    qua, khiến kết quả đánh giá không phản ánh hệ thống thật."""
+    docs = hybrid_search(question, collection_name=EVAL_COLLECTION, k=5)
+    contexts = [d.page_content for d in docs] or ["(không truy xuất được context nào)"]
+    answer = ask_agent(agent, question)
+    return answer, contexts
 
-    model_name = os.getenv("LLM_MODEL", "gemini-3.1-flash-lite")
-    print(f"Đang sử dụng LLM model cho Ragas: {model_name}")
 
-    data = {
-    "question": [
-        "Thuật toán RRF trong hệ thống Hybrid Search hoạt động thế nào?",
-        "Làm cách nào để viết Recursive CTE trong PostgreSQL để xử lý dữ liệu phân cấp?",
-        "Sự khác biệt chính giữa giao thức TCP và UDP trong mạng máy tính là gì?",
-        "Mô hình Word2Vec với kiến trúc Skip-gram hoạt động ra sao?"
-    ],
-    "answer": [
-        "Thuật toán Reciprocal Rank Fusion (RRF) kết hợp kết quả xếp hạng từ Vector Search và Full-Text Search bằng cách tính điểm nghịch đảo của thứ hạng mà không cần chuẩn hóa điểm số gốc.",
-        "Recursive CTEs trong PostgreSQL sử dụng cấu trúc WITH RECURSIVE, bao gồm một truy vấn cơ sở (anchor member) kết hợp với một truy vấn đệ quy (recursive member) liên kết qua mệnh đề UNION ALL.",
-        "TCP là giao thức có thiết lập kết nối, đảm bảo độ tin cậy và truyền dữ liệu theo thứ tự, trong khi UDP là giao thức phi kết nối, tốc độ nhanh nhưng không đảm bảo độ tin cậy.",
-        "Kiến trúc Skip-gram của Word2Vec nhận đầu vào là một từ trung tâm (center word) để dự đoán các từ ngữ cảnh (context words) xung quanh trong một cửa sổ văn bản."
-    ],
-    "contexts": [
-        [
-            "Hybrid Search kết hợp Vector Search và PostgreSQL Full-Text Search thông qua Reciprocal Rank Fusion (RRF). RRF gộp các kết quả bằng công thức tính điểm dựa trên thứ hạng xếp hạng của từng phương pháp tìm kiếm."
-        ],
-        [
-            "Recursive Common Table Expressions (CTEs) cho phép truy vấn dữ liệu phân cấp hoặc dạng cây trong PostgreSQL bằng cách lặp lại tập kết quả cho đến khi không còn bản ghi nào thỏa mãn điều kiện đệ quy."
-        ],
-        [
-            "Giao thức truyền tải Transport Layer phân biệt rõ giữa TCP (Transmission Control Protocol) đảm bảo truyền dữ liệu tin cậy, kiểm soát tắc nghẽn và UDP (User Datagram Protocol) tối ưu cho tốc độ truyền tải thời gian thực."
-        ],
-        [
-            "Word2Vec cung cấp hai kiến trúc học biểu diễn từ là CBOW và Skip-gram. Skip-gram dự đoán các từ ngữ cảnh từ từ khóa trung tâm, phù hợp rất tốt với các tập dữ liệu huấn luyện có kích thước lớn."
-        ]
-    ],
-    "ground_truth": [
-        "RRF kết hợp kết quả xếp hạng từ Vector Search và Full-Text Search dựa trên công thức nghịch đảo thứ hạng.",
-        "Sử dụng cấu trúc WITH RECURSIVE với anchor member và recursive member nối bằng UNION ALL trong PostgreSQL.",
-        "TCP có thiết lập kết nối và đảm bảo độ tin cậy, còn UDP là giao thức phi kết nối tốc độ nhanh.",
-        "Skip-gram trong Word2Vec dùng từ trung tâm để dự đoán các từ ngữ cảnh xung quanh."
-    ],
-}
+def run_evaluation() -> None:
+    config_error = get_config_error()
+    if config_error:
+        raise RuntimeError(f"Lỗi cấu hình: {config_error}")
 
-    dataset = Dataset.from_dict(data)
+    print(f"Collection dùng để eval: '{EVAL_COLLECTION}' (đổi qua biến EVAL_COLLECTION)")
+    print(f"Model LLM: {app_config.llm_model}")
+    print("Đang chạy pipeline thật (hybrid_search + agent) cho từng câu hỏi...")
 
-    # 1. Khởi tạo LLM giám khảo lấy từ biến môi trường
+    agent = build_agent(collection_name=EVAL_COLLECTION)
+
+    questions, answers, contexts_list, ground_truths = [], [], [], []
+    for item in EVAL_QUESTIONS:
+        print(f"  - {item['question']}")
+        answer, contexts = _run_pipeline_for_question(agent, item["question"])
+        questions.append(item["question"])
+        answers.append(answer)
+        contexts_list.append(contexts)
+        ground_truths.append(item["ground_truth"])
+
+    dataset = Dataset.from_dict(
+        {
+            "question": questions,
+            "answer": answers,
+            "contexts": contexts_list,
+            "ground_truth": ground_truths,
+        }
+    )
+
+    # Dùng CÙNG LLM app đang dùng thật (đo đúng chất lượng model thật đang
+    # chạy), và embedding LOCAL (bge-m3, giống hệt app) thay vì gọi thêm 1
+    # model embedding Gemini riêng cho việc chấm điểm — lý do:
+    #   1. Không tốn thêm quota Gemini chỉ để evaluate.
+    #   2. "models/embedding-001" ở bản trước là model cũ/dễ deprecated —
+    #      đây chính là nguyên nhân answer_relevancy=NaN toàn bộ ở kết quả cũ.
     evaluator_llm = ChatGoogleGenerativeAI(
-        model=model_name,
+        model=app_config.llm_model,
         temperature=0,
-        google_api_key=gemini_key
+        google_api_key=app_config.google_api_key,
     )
+    evaluator_embeddings = LangchainEmbeddingsWrapper(embeddings=get_embeddings())
 
-    # 2. Sử dụng LangchainEmbeddingsWrapper chuẩn xác theo phiên bản Ragas mới
-    evaluator_embeddings = LangchainEmbeddingsWrapper(
-        embeddings=GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
-            google_api_key=gemini_key
-        )
-    )
-
-    # 3. Chạy đánh giá Ragas
-    print("Đang chạy đánh giá RAG tự động...")
+    print("\nĐang chạy đánh giá RAGAS...")
     result = evaluate(
         dataset=dataset,
         metrics=[faithfulness, answer_relevancy, context_precision],
@@ -78,14 +128,27 @@ def run_evaluation():
         embeddings=evaluator_embeddings,
     )
 
-    # 4. Xuất kết quả ra file JSON cho CI/CD artifact
-    output_path = Path("evaluation/evaluation_results.json")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df = result.to_pandas()
+    output_path = Path(__file__).parent / "evaluation_results.json"
     output_path.write_text(
-        json.dumps(result.to_pandas().to_dict(orient="records"), ensure_ascii=False, indent=2),
+        json.dumps(df.to_dict(orient="records"), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"Đã lưu báo cáo đánh giá vào {output_path}")
+
+    summary = df[["faithfulness", "answer_relevancy", "context_precision"]].mean().to_dict()
+    print("\n=== ĐIỂM TRUNG BÌNH (chạy trên pipeline thật) ===")
+    for metric, score in summary.items():
+        print(f"  {metric:<20}{score:.3f}")
+    print(f"\nChi tiết từng câu hỏi đã lưu vào {output_path}")
+
+    # Cổng chất lượng cho CI: fail build nếu điểm dưới ngưỡng, thay vì chỉ
+    # xuất báo cáo rồi không ai đọc.
+    failed = {m: s for m, s in summary.items() if s == s and s < MIN_SCORE}  # s==s loại NaN
+    if failed:
+        print(f"\n❌ Các chỉ số dưới ngưỡng tối thiểu {MIN_SCORE} (đặt qua RAGAS_MIN_SCORE): {failed}")
+        sys.exit(1)
+    print(f"\n✅ Tất cả chỉ số đạt ngưỡng tối thiểu {MIN_SCORE}.")
+
 
 if __name__ == "__main__":
     run_evaluation()

@@ -1,0 +1,17 @@
+# Chỉ cần khi chạy các script trong evaluation/ — không cần cho app chính
+# hay CI thường xuyên (nặng, gọi API thật, không nên chạy trên mọi PR).
+#
+# ⚠️ QUAN TRỌNG: ragas còn phụ thuộc cấu trúc langchain_community CŨ
+# (langchain_community.chat_models.vertexai), trong khi requirements.txt của
+# project dùng thế hệ langchain-core 1.x mới hơn — cài chung 1 venv SẼ gây
+# xung đột phiên bản (pip báo lỗi ImportError/ModuleNotFoundError khó hiểu).
+#
+# Khuyến nghị: tạo virtualenv RIÊNG chỉ để chạy đánh giá, không dùng chung
+# venv với app chính:
+#   python -m venv .venv-eval
+#   source .venv-eval/bin/activate
+#   pip install -r requirements.txt -r requirements-eval.txt
+#   python -m evaluation.evaluate_rag
+#   deactivate
+ragas
+datasets
