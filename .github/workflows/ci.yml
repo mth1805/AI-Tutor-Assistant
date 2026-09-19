@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          pip install -r requirements.txt -r requirements-dev.txt -r requirements-eval.txt
 
       - name: Lint (ruff)
         run: ruff check .
@@ -51,3 +51,8 @@ jobs:
         with:
           name: rag-evaluation-report
           path: evaluation/evaluation_results.json
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
