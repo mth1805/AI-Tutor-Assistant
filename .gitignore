@@ -27,3 +27,5 @@ faiss_index/           # bản cũ dùng FAISS, không còn dùng nữa nhưng p
 # --- Evaluate ---
 evaluation_results.json
 
+requirements_1.txt
+test_lib.py

@@ -35,7 +35,7 @@ jobs:
       EVAL_COLLECTION: ${{ inputs.collection || 'eval_collection' }}
       GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
-      LLM_MODEL: gemini-1.5-flash
+      LLM_MODEL: gemini-3.5-flash-lite
       RAGAS_MIN_SCORE: "0.6"
       EMBEDDING_DEVICE: cpu
 
